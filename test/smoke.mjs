@@ -1,5 +1,5 @@
 /**
- * smoke.mjs — smoke test รันบน dist ครบ 13 ข้อตาม SPEC
+ * smoke.mjs — smoke test รันบน dist ครบ 8 ข้อตาม SPEC
  * รัน: node test/smoke.mjs (ต้อง npm run build ก่อน) — exit 0 เมื่อผ่านทั้งหมด
  */
 import { spawn } from "node:child_process";
@@ -187,7 +187,9 @@ try {
   check("health คืน orphans/dead_links/notes",
     Array.isArray(health.data.orphans) && Array.isArray(health.data.dead_links) && typeof health.data.notes === "number",
     JSON.stringify(health.data));
-  check("fleeting ที่ยังไม่ลิงก์เป็น orphan", health.data.orphans?.includes(cap.data.id));
+  check("fleeting ที่ยังไม่ลิงก์ไม่นับ orphan (นับแยกใน orphans_fleeting)",
+    !health.data.orphans?.includes(cap.data.id) && (health.data.orphans_fleeting ?? 0) >= 1,
+    JSON.stringify({ orphans: health.data.orphans, orphans_fleeting: health.data.orphans_fleeting }));
   check("health.json ถูกเขียน", existsSync(path.join(root, ".kb/health.json")) &&
     JSON.parse(readFileSync(path.join(root, ".kb/health.json"), "utf8")).notes === health.data.notes);
 
@@ -284,6 +286,24 @@ try {
   check("health เตือน packs_unverified",
     (health3.data.packs_unverified ?? []).some((p) => p.includes("modified") || p.includes("unreviewed")),
     JSON.stringify(health3.data.packs_unverified));
+
+  // ---- 14. v1.2.1 durability (atomic write / link dedup / orphan ไม่นับ fleeting) ----
+  console.log("14) v1.2.1 durability");
+  const upd = await client.call("brain_update_note", { id: note1.data.id, body: "แก้ typo แล้ว — แรงโน้มถ่วงแปรผันตาม GMm/r^2" });
+  check("update_note แก้ body ได้", upd.data.ok === true);
+  const read2 = await client.call("brain_read", { id_or_alias: note1.data.id });
+  check("body เปลี่ยนจริง", (read2.data.body ?? "").includes("GMm/r^2"), (read2.data.body ?? "").slice(0, 60));
+  const before = readFileSync(path.join(root, ".kb/links.jsonl"), "utf8").trim().split("\n").filter(Boolean).length;
+  const link2 = await client.call("brain_link", { from_id: note1.data.id, to_id: noteT1.data.id, rel: "supports" });
+  const after = readFileSync(path.join(root, ".kb/links.jsonl"), "utf8").trim().split("\n").filter(Boolean).length;
+  check("link ซ้ำถูก dedup (deduped=true)", link2.data.deduped === true, JSON.stringify(link2.data));
+  check("links.jsonl ไม่โตเมื่อซ้ำ", after === before, `before=${before} after=${after}`);
+  const health4 = await client.call("brain_health", {});
+  check("orphans ไม่นับ fleeting ที่ยังไม่ลิงก์", !(health4.data.orphans ?? []).includes(cap.data.id),
+    JSON.stringify(health4.data.orphans));
+  check("orphans_fleeting นับ fleeting แยก", (health4.data.orphans_fleeting ?? 0) >= 1);
+  const tmpLeft = [...readdirSync(path.join(root, "10_Notes")), ...readdirSync(path.join(root, "00_Fleeting")), ...readdirSync(path.join(root, "20_Atlas"))].filter((f) => f.includes(".tmp-"));
+  check("ไม่มีไฟล์ .tmp-* ค้าง (atomic write)", tmpLeft.length === 0, tmpLeft.join(","));
 } catch (err) {
   failed++;
   console.error("FATAL:", err);
@@ -297,5 +317,5 @@ if (failed > 0) {
   console.error(`SMOKE TEST FAILED (${failed} ข้อ)`);
   process.exit(1);
 }
-console.log("SMOKE TEST PASSED (ครบ 13 ข้อ)");
+console.log("SMOKE TEST PASSED (ครบ 14 ข้อ)");
 process.exit(0);
