@@ -129,3 +129,7 @@ src/
 test/
 └── smoke.mjs   # smoke test 15 sections (60 checks) รันบน dist
 ```
+
+## Skills
+
+โฟลเดอร์ [`skills/`](./skills/) เก็บ skill ของระบบ Zero_Brain ในรูปแบบ `SKILL.md` มาตรฐาน — ส่งไฟล์ให้ AI (Kimi Work / Claude Code) สั่ง "ติดตั้ง skill นี้" ได้เลย หรือวางด้วยมือตาม[คู่มือใน `skills/README.md`](./skills/README.md)
