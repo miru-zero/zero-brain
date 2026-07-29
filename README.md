@@ -73,6 +73,20 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
 
 ถ้าอยากย้ายที่เก็บสมอง เพิ่ม `"env": { "ZERO_BRAIN_ROOT": "/absolute/path/to/my-brain" }` — เปลี่ยน `/absolute/path/to/...` เป็น path จริงของเครื่องคุณ
 
+## Zone convention — ทุกอย่างของเราอยู่ใต้ `~/.zero/`
+
+บ้านโซนเดียวกันทั้งระบบ: ของที่ชื่อ `zero-X` จะอยู่ที่ `~/.zero/X` (ตัด `zero-` แล้วเปลี่ยน `-` เป็น `/`) เช่น
+
+```
+~/.zero/
+├── brain/        # เนื้อสมองของ zero-brain (repo นี้) — default ตั้งแต่ v2.1.0
+└── <อนาคต>/      # โปรเจกต์ zero-* ตัวอื่นจะมาอยู่ใต้โซนเดียวกันนี้
+```
+
+- โค้ด (repo) อยู่ที่ไหนก็ได้ แต่ **ข้อมูลรันไทม์ทั้งหมดอยู่ใต้ `~/.zero/`** ที่เดียว ไม่รก
+- ย้ายได้เสมอด้วย `ZERO_BRAIN_ROOT` แต่ default คือโซนนี้
+- env ที่ระบบอ่านมีแค่ `ZERO_BRAIN_ROOT` / `ZERO_BRAIN_ACTOR` (และ fallback `CENTRAL_BRAIN_*`)
+
 ## การทดสอบ
 
 ```bash
