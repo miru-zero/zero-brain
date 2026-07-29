@@ -1,0 +1,24 @@
+{
+  "name": "central-brain-mcp-server",
+  "version": "1.0.0",
+  "description": "Central Brain MCP Server — สมองกลาง domain-agnostic ผ่าน MCP (stdio)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "central-brain": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node test/smoke.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
+  }
+}
