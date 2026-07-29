@@ -59,18 +59,19 @@
     <div class="cmd"><span class="p">$ </span>cd zero-brain && npm install && npm run build<button class="copy" data-c="cd zero-brain && npm install && npm run build">copy</button></div>
   </div>
 
-  <div class="step warn"><b>3. ต้องผ่านก่อนไปต่อ</b> — smoke test 45 ข้อ (T2 gate / provenance / nightly / scanner)
+  <div class="step warn"><b>3. ต้องผ่านก่อนไปต่อ</b> — smoke test 64 ข้อ (T2 gate / provenance / nightly / token-saving / install UX)
     <div class="cmd"><span class="p">$ </span>node test/smoke.mjs<button class="copy" data-c="node test/smoke.mjs">copy</button></div>
-    <div class="note">ผลที่คาด: <span style="color:var(--green)">ผ่าน 45/45</span> — ถ้าไม่ผ่าน ห้าม install ให้รายงาน error ก่อน</div>
+    <div class="note">ผลที่คาด: <span style="color:var(--green)">ผ่าน 64/64</span> — ถ้าไม่ผ่าน ห้าม install ให้รายงาน error ก่อน</div>
   </div>
 
-  <div class="step"><b>4.</b> วางเนื้อสมอง — แตก <b>Central_Brain_seed</b> จาก pack zip ไปไว้ที่ brain root (เช่น <b>M:\Central_Brain</b>)
-    <div class="note">ห้ามวางในโฟลเดอร์ clone · ห้าม commit ขึ้น git · เนื้อสมองอยู่ local เท่านั้น (กฎเหล็กข้อ 5)</div>
+  <div class="step"><b>4.</b> สร้างโครงสมองอัตโนมัติ — ไม่ต้องแตก seed zip เอง (default ไปที่ <b>~/.zero/brain</b> ถ้าอยากใช้ที่อื่นให้ตั้ง ZERO_BRAIN_ROOT ก่อน)
+    <div class="cmd"><span class="p">$ </span>npm run init<button class="copy" data-c="npm run init">copy</button></div>
+    <div class="note">ห้ามวางเนื้อสมองในโฟลเดอร์ clone · ห้าม commit ขึ้น git · เนื้อสมองอยู่ local เท่านั้น (กฎเหล็กข้อ 5)</div>
   </div>
 
   <div class="step"><b>5.</b> สร้าง MCP config จากตัวกำเนิดด้านล่าง แล้ววางใน config ของ client ของคุณ</div>
 
-  <div class="step"><b>6.</b> เปิด client แล้วเรียก <b>brain_health</b> — เห็น <b>58 notes / 0 dead_links</b> = สำเร็จ</div>
+  <div class="step"><b>6.</b> เปิด client แล้วเรียก <b>zero_health</b> — เห็น counts ครบ = สำเร็จ</div>
 
   <h2>ตัวกำเนิด MCP config</h2>
   <div class="gen">
@@ -91,8 +92,8 @@
     </div>
     <label>ที่อยู่โค้ด (โฟลเดอร์ที่ clone)</label>
     <input id="code" value="C:\Users\you\zero-brain">
-    <label>brain root (ที่อยู่เนื้อสมอง)</label>
-    <input id="root" value="M:\Central_Brain">
+    <label>brain root (ที่อยู่เนื้อสมอง — default ~/.zero/brain)</label>
+    <input id="root" value="C:\Users\you\.zero\brain">
     <div id="out" title="คลิกเพื่อ copy"></div>
     <div class="note">คลิกที่กล่องผลลัพธ์เพื่อ copy JSON ทั้งบล็อก</div>
   </div>
@@ -104,11 +105,11 @@
   <div class="rule">ไม่มีทริกเกอร์ = ไม่อ่าน · server อ่าน env แค่ <span class="tag">ZERO_BRAIN_ROOT</span><span class="tag">ZERO_BRAIN_ACTOR</span> เท่านั้น</div>
 
   <h2>พร้อมใช้งานแล้ว?</h2>
-  <div class="step">เช้า: <b>brain_home</b> · จดด่วน: <b>brain_capture</b> · เขียนความรู้: <b>brain_write_note</b> · ก่อนนอน: <b>brain_nightly</b>
-    <div class="note">ก่อนลงมืองานใหญ่ ให้ค้นสมองก่อนว่าเคยทำ/รู้เรื่องนี้แล้วหรือยัง (brain_search / brain_resolve) — 13 tools ครบใน README ของ repo</div>
+  <div class="step">เช้า: <b>zero_home</b> · จดด่วน: <b>zero_capture</b> · เขียนความรู้: <b>zero_write_note</b> · ก่อนนอน: <b>zero_nightly</b>
+    <div class="note">ก่อนลงมืองานใหญ่ ให้ค้นสมองก่อนว่าเคยทำ/รู้เรื่องนี้แล้วหรือยัง (zero_search / zero_resolve) — 13 tools ครบใน README ของ repo</div>
   </div>
 
-  <footer>zero-brain v2.0.1 · miru-zero · เอกสารเต็ม: README.md / INSTALL.md / ROADMAP-v1.3.md ใน repo</footer>
+  <footer>zero-brain v2.1.0 · miru-zero · เอกสารเต็ม: README.md / INSTALL.md / ROADMAP-v1.3.md ใน repo</footer>
 </div>
 
 <script>

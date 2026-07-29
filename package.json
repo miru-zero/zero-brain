@@ -1,6 +1,6 @@
 {
   "name": "zero-brain-mcp-server",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Zero Brain MCP Server — สมองกลาง domain-agnostic ผ่าน MCP (stdio)",
   "license": "MIT",
   "type": "module",
@@ -10,6 +10,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "init": "node dist/index.js --init",
     "test": "node test/smoke.mjs"
   },
   "engines": {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Zero Brain MCP Server (v2.0.1)
+ * Zero Brain MCP Server (v2.1.0)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
@@ -982,7 +982,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.0.1" },
+  { name: "zero-brain-mcp-server", version: "2.1.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -1013,6 +1013,12 @@ server.setRequestHandler(CallToolRequestSchema, (request) => {
 });
 
 async function main(): Promise<void> {
+  // โหมด CLI: `node dist/index.js --init` สร้างโครงสมองที่ brain root (default ~/.zero/brain) แล้วจบ — ไม่เปิด MCP server
+  if (process.argv.includes("--init")) {
+    const result = handleInit() as { root: string; created: string[]; already_existed: boolean };
+    console.log(JSON.stringify(result, null, 2));
+    return;
+  }
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`zero-brain-mcp-server ready (root=${ROOT})`);

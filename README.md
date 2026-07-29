@@ -2,6 +2,12 @@
 
 MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Zero Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
 
+> **v2.1.0 (2026-07-29)** — install ง่ายขึ้นมาก:
+> 1. **`npm run init` สร้างโครงสมองให้อัตโนมัติ** — ไม่ต้องแตก seed zip เองอีก (`node dist/index.js --init` ใช้ handler เดียวกับ `zero_init`)
+> 2. **บ้านหลัก default คือ `~/.zero/brain`** — ไม่ตั้ง env ก็ใช้ได้เลย (ตั้ง `ZERO_BRAIN_ROOT` เฉพาะตอนอยากย้ายที่)
+> 3. seed zip (`Central_Brain_seed`) เหลือไว้สำหรับย้ายสมองเก่าเท่านั้น
+> smoke test 64/64 (16 sections)
+>
 > **v2.0.1 (2026-07-29)** — เปลี่ยนชื่อโปรเจกต์ **central-brain → zero-brain** (คนละตัวกับ skill `zero-brain-memory`):
 > 1. repo ย้ายเป็น `miru-zero/zero-brain` (URL เก่า redirect อัตโนมัติ)
 > 2. package/bin: `zero-brain-mcp-server` / `zero-brain`
@@ -31,7 +37,7 @@ MCP server (stdio transport) สำหรับเชื่อม agent ใด�
 >
 > **หมายเหตุ pack:** `node_modules/` ถูก bundle มาใน zip เจตนาเพื่อ **offline install** (ข้าม `npm install` ได้เลย แค่ `npm run build` หรือใช้ `dist/` ที่ build มาแล้ว)
 >
-> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 60/60 = พร้อม) → ค่อยตั้งค่า MCP client จริง
+> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 64/64 = พร้อม) → ค่อยตั้งค่า MCP client จริง
 
 ## ความต้องการ
 
@@ -43,13 +49,14 @@ MCP server (stdio transport) สำหรับเชื่อม agent ใด�
 ```bash
 npm install
 npm run build
+npm run init    # สร้างโครงสมองที่ ~/.zero/brain อัตโนมัติ (ตั้ง ZERO_BRAIN_ROOT ก่อนถ้าอยากใช้ที่อื่น)
 ```
 
 build จะ compile TypeScript ไปที่ `dist/` — entry point คือ `dist/index.js` (มี shebang `#!/usr/bin/env node`)
 
 ## การตั้งค่า MCP client
 
-กำหนดตำแหน่ง brain root ผ่าน env `ZERO_BRAIN_ROOT` (ถ้าไม่ตั้ง จะใช้ `./brain` สัมพัทธ์กับ working directory) — ตั้งแต่ v2.0.1 รองรับ `CENTRAL_BRAIN_ROOT` เป็น fallback เพื่อไม่ break config เก่า
+**ไม่ต้องตั้ง env ก็ได้** — default สมองจะอยู่ที่ `~/.zero/brain` (ตั้งแต่ v2.1.0) ตั้ง `ZERO_BRAIN_ROOT` เฉพาะตอนอยากย้ายที่เก็บ — ตั้งแต่ v2.0.1 รองรับ `CENTRAL_BRAIN_ROOT` เป็น fallback เพื่อไม่ break config เก่า
 
 ตัวอย่าง config สำหรับ MCP client (เช่น Claude Desktop / client ที่รองรับ stdio):
 
@@ -58,16 +65,13 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
   "mcpServers": {
     "zero-brain": {
       "command": "node",
-      "args": ["/absolute/path/to/zero-brain/dist/index.js"],
-      "env": {
-        "ZERO_BRAIN_ROOT": "/absolute/path/to/my-brain"
-      }
+      "args": ["/absolute/path/to/zero-brain/dist/index.js"]
     }
   }
 }
 ```
 
-> เปลี่ยน `/absolute/path/to/...` เป็น path จริงของเครื่องคุณ
+ถ้าอยากย้ายที่เก็บสมอง เพิ่ม `"env": { "ZERO_BRAIN_ROOT": "/absolute/path/to/my-brain" }` — เปลี่ยน `/absolute/path/to/...` เป็น path จริงของเครื่องคุณ
 
 ## การทดสอบ
 
@@ -76,7 +80,7 @@ npm run build
 node test/smoke.mjs
 ```
 
-smoke test ครอบคลุม 15 sections (60 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving — ต้องผ่านทั้งหมด (exit 0)
+smoke test ครอบคลุม 16 sections (64 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving / v2.1.0 install UX — ต้องผ่านทั้งหมด (exit 0)
 
 ## Tools ทั้ง 13 ตัว
 
@@ -132,7 +136,7 @@ src/
 ├── kernel.ts   # append-only JSONL, manifest/links/aliases/health/audit
 └── schema.ts   # frontmatter parse/serialize (YAML แบบจำกัด), slug sanitize, validation
 test/
-└── smoke.mjs   # smoke test 15 sections (60 checks) รันบน dist
+└── smoke.mjs   # smoke test 16 sections (64 checks) รันบน dist
 ```
 
 ## Skills

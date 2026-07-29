@@ -9,6 +9,7 @@
 
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import path from "node:path";
 
 export interface ManifestRecord {
@@ -60,9 +61,14 @@ export const KB_DIRS = [
   "99_System/snapshots",
 ] as const;
 
+export function defaultBrainRoot(): string {
+  // บ้านหลักของสมองตั้งแต่ v2.1.0 — ถ้าไม่ตั้ง env จะสร้าง/ใช้ที่นี่ที่เดียว
+  return path.join(homedir(), ".zero", "brain");
+}
+
 export function brainRoot(): string {
   // ZERO_BRAIN_ROOT เป็นชื่อหลักตั้งแต่ v2.0.1 — CENTRAL_BRAIN_ROOT ยังใช้ได้ (fallback)
-  const root = process.env.ZERO_BRAIN_ROOT ?? process.env.CENTRAL_BRAIN_ROOT ?? "./brain";
+  const root = process.env.ZERO_BRAIN_ROOT ?? process.env.CENTRAL_BRAIN_ROOT ?? defaultBrainRoot();
   return path.resolve(root);
 }
 

@@ -2,7 +2,7 @@
  * smoke.mjs — smoke test รันบน dist ครบ 8 ข้อตาม SPEC
  * รัน: node test/smoke.mjs (ต้อง npm run build ก่อน) — exit 0 เมื่อผ่านทั้งหมด
  */
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -336,6 +336,33 @@ try {
   check("health ยังคืน arrays (top-N) เหมือนเดิม", Array.isArray(healthSlim.data.orphans) && Array.isArray(healthSlim.data.dead_body_links));
   const healthJson = JSON.parse(readFileSync(path.join(root, ".kb/health.json"), "utf8"));
   check("health.json เก็บค่าเต็มไว้เสมอ", Array.isArray(healthJson.dead_body_links) && typeof healthJson.notes === "number");
+
+  // ---- 16. v2.1.0 install UX — --init CLI สร้างโครงสมองเอง ----
+  console.log("16) v2.1.0 install UX");
+  const root2 = mkdtempSync(path.join(tmpdir(), "zero-brain-init-"));
+  try {
+    const out = execFileSync(process.execPath, [serverEntry, "--init"], {
+      env: { ...process.env, ZERO_BRAIN_ROOT: root2 },
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    const initRes = JSON.parse(out);
+    check("--init exit 0 + คืน ok", initRes.ok === true, out.slice(0, 120));
+    check("--init คืน root ตรงที่สั่ง", typeof initRes.root === "string" && path.resolve(initRes.root) === path.resolve(root2));
+    check("--init สร้างโฟลเดอร์+ไฟล์ kernel ครบ",
+      [".kb/manifest.jsonl", ".kb/links.jsonl", ".kb/aliases.json", ".kb/health.json", ".kb/audit.jsonl",
+        "20_Atlas/Home.md", "20_Atlas/Today.md"].every((f) => existsSync(path.join(root2, f))) &&
+      [".kb/packs", "00_Fleeting", "10_Notes", "20_Atlas", "30_Sources", "40_Templates/base", "99_System/snapshots"]
+        .every((d) => existsSync(path.join(root2, d))));
+    const out2 = execFileSync(process.execPath, [serverEntry, "--init"], {
+      env: { ...process.env, ZERO_BRAIN_ROOT: root2 },
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    check("--init ซ้ำไม่พัง (already_existed)", JSON.parse(out2).already_existed === true);
+  } finally {
+    rmSync(root2, { recursive: true, force: true });
+  }
 } catch (err) {
   failed++;
   console.error("FATAL:", err);
@@ -349,5 +376,5 @@ if (failed > 0) {
   console.error(`SMOKE TEST FAILED (${failed} ข้อ)`);
   process.exit(1);
 }
-console.log("SMOKE TEST PASSED (ครบ 15 ข้อ)");
+console.log("SMOKE TEST PASSED (ครบ 16 ข้อ)");
 process.exit(0);
