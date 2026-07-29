@@ -1,5 +1,6 @@
+#!/usr/bin/env node
 /**
- * Central Brain MCP Server (v1.1)
+ * Central Brain MCP Server (v1.2.1)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
@@ -7,48 +8,57 @@
  * health สแกน body wikilinks ด้วย / ทุก mutation audit
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
-  initBrain, isInitialized, isoNow, kbPath, readManifest, readAliases,
-  appendLink, appendAudit, writeHealth, sha256,
-  type HealthReport, type ManifestRecord, type NoteLink,
-} from "./kernel.js";
-import {
-  parseNoteFile, serializeFrontmatter, slugify, extractWikilinks,
-  NOTE_TYPES, PRIVACY_LEVELS, NOTE_STATES,
+  NOTE_TYPES,
+  PRIVACY_LEVELS,
+  NOTE_STATES,
+  genId,
+  sanitizeSlug,
+  serializeNote,
+  parseNoteFile,
+  today,
   type NoteMeta,
+  type NoteType,
+  type Privacy,
+  type NoteState,
+  type NoteLink,
+  type ParsedNote,
 } from "./schema.js";
+import {
+  audit,
+  brainRoot,
+  appendLink,
+  initBrain,
+  isInitialized,
+  kbPath,
+  readAliases,
+  readAudit,
+  readLinks,
+  readManifest,
+  sha256,
+  upsertManifest,
+  writeAliases,
+  writeHealth,
+  type HealthReport,
+  type ManifestRecord,
+} from "./kernel.js";
 
-const ROOT = path.resolve(process.env.CENTRAL_BRAIN_ROOT ?? "./brain");
-const ACTOR = process.env.CENTRAL_BRAIN_ACTOR ?? "unknown-agent";
-const ID_RE = /^\d{8}-\d{6}-[a-z0-9]{4}$/;
+const ROOT = brainRoot();
+const ACTOR = process.env.CENTRAL_BRAIN_ACTOR ?? "central-brain-mcp";
 
 // ---------- helpers ----------
 
-function randomSuffix(): string {
-  return Math.random().toString(36).slice(2, 6).padEnd(4, "0");
+function ok(result: unknown): { content: { type: "text"; text: string }[] } {
+  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 }
 
-function newId(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomSuffix()}`;
-}
-
-function rel(abs: string): string {
-  return path.relative(ROOT, abs).split(path.sep).join("/");
-}
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(message: string) {
-  return { content: [{ type: "text" as const, text: JSON.stringify({ error: message }) }], isError: true };
+function fail(message: string): { isError: true; content: { type: "text"; text: string }[] } {
+  return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }] };
 }
 
 function ensureBrain(): void {
@@ -102,262 +112,398 @@ function extractBodyWikilinks(body: string): string[] {
   return out;
 }
 
-function audit(root: string, actor: string, action: string, target: string, detail?: string): void {
-  appendAudit(root, { ts: isoNow(), actor, action, target, ...(detail ? { detail } : {}) });
+function rel(p: string): string {
+  return path.relative(ROOT, p).split(path.sep).join("/");
 }
 
-/** ค้นหาไฟล์โน้ตจาก id หรือ alias — คืน { absPath, meta, body } หรือ null */
-function findNote(idOrAlias: string): { absPath: string; meta: NoteMeta; body: string } | null {
+/** เขียนไฟล์แบบ atomic — tmp+rename กัน crash กลางเขียนแล้วโน้ตพัง (กฎ: ห้ามทำลายข้อมูล) */
+function atomicWrite(abs: string, content: string): void {
+  const tmp = `${abs}.tmp-${process.pid}`;
+  writeFileSync(tmp, content, "utf8");
+  renameSync(tmp, abs);
+}
+
+function noteRelPath(subdir: string, meta: NoteMeta, withSlug: boolean): string {
+  const name = withSlug ? `${meta.id} - ${sanitizeSlug(meta.title)}.md` : `${meta.id}.md`;
+  return `${subdir}/${name}`;
+}
+
+function saveNote(subdir: string, meta: NoteMeta, body: string, withSlug: boolean): string {
+  const relPath = noteRelPath(subdir, meta, withSlug);
+  const abs = path.join(ROOT, relPath);
+  const content = serializeNote({ meta, body });
+  atomicWrite(abs, content);
+  upsertManifest(ROOT, {
+    id: meta.id,
+    path: relPath,
+    type: meta.type,
+    title: meta.title,
+    domain: meta.domain,
+    privacy: meta.privacy,
+    created: meta.created,
+    updated: meta.updated,
+    sha256: sha256(content),
+  });
+  return relPath;
+}
+
+function resolveId(idOrAlias: string): string {
+  const aliases = readAliases(ROOT);
+  return aliases[idOrAlias] ?? idOrAlias;
+}
+
+/** หาโน้ตจาก id (รองรับ alias) — คืน {meta, body, relPath} หรือ null */
+function findNote(idOrAlias: string): (ParsedNote & { relPath: string }) | null {
+  const id = resolveId(idOrAlias);
   const manifest = readManifest(ROOT);
-  let rec: ManifestRecord | undefined = manifest.get(idOrAlias);
-  if (!rec) {
-    const aliases = readAliases(ROOT);
-    const target = aliases[idOrAlias];
-    if (target) rec = manifest.get(target);
-  }
-  if (!rec) {
-    for (const r of manifest.values()) {
-      if (r.title === idOrAlias) { rec = r; break; }
+  const rec = manifest.get(id);
+  if (rec) {
+    const abs = path.join(ROOT, rec.path);
+    if (existsSync(abs)) {
+      const parsed = parseNoteFile(readFileSync(abs, "utf8"));
+      return { ...parsed, relPath: rec.path };
     }
   }
-  if (!rec) return null;
-  const abs = path.join(ROOT, rec.path);
-  if (!existsSync(abs)) return null;
-  const parsed = parseNoteFile(readFileSync(abs, "utf8"));
-  return { absPath: abs, meta: parsed.meta, body: parsed.body };
+  // fallback: scan โฟลเดอร์โน้ตจากชื่อไฟล์
+  for (const dir of ["10_Notes", "00_Fleeting", "20_Atlas", "30_Sources"]) {
+    const full = path.join(ROOT, dir);
+    if (!existsSync(full)) continue;
+    for (const f of readdirSync(full)) {
+      if (f.startsWith(id) && f.endsWith(".md")) {
+        const relPath = `${dir}/${f}`;
+        const parsed = parseNoteFile(readFileSync(path.join(full, f), "utf8"));
+        return { ...parsed, relPath };
+      }
+    }
+  }
+  return null;
 }
 
-function appendManifest(rec: ManifestRecord): void {
-  const p = kbPath(ROOT, "manifest.jsonl");
-  const line = JSON.stringify(rec);
-  writeFileSync(p, readFileSync(p, "utf8") + line + "\n", "utf8");
+function registerAliases(meta: NoteMeta): void {
+  if (meta.aliases.length === 0) return;
+  const aliases = readAliases(ROOT);
+  let changed = false;
+  for (const a of meta.aliases) {
+    if (aliases[a] !== meta.id) {
+      aliases[a] = meta.id;
+      changed = true;
+    }
+  }
+  if (changed) writeAliases(ROOT, aliases);
 }
 
-function writeAliases(aliases: Record<string, string>): void {
-  writeFileSync(kbPath(ROOT, "aliases.json"), JSON.stringify(aliases, null, 2) + "\n", "utf8");
+function normalizeLinks(input: unknown): NoteLink[] {
+  if (!Array.isArray(input)) return [];
+  const out: NoteLink[] = [];
+  for (const item of input) {
+    if (typeof item === "string") out.push({ to: item, rel: "related" });
+    else if (item && typeof item === "object") {
+      const o = item as Record<string, unknown>;
+      if (typeof o.to === "string") out.push({ to: o.to, rel: typeof o.rel === "string" ? o.rel : "related" });
+    }
+  }
+  return out;
+}
+
+function normalizeStringArray(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  return input.filter((x): x is string => typeof x === "string");
+}
+
+function getString(args: Record<string, unknown>, key: string): string | undefined {
+  const v = args[key];
+  return typeof v === "string" ? v : undefined;
 }
 
 // ---------- tool handlers ----------
 
 function handleInit(): unknown {
-  if (isInitialized(ROOT)) {
-    return { ok: true, already: true, root: ROOT, message: "brain นี้ init แล้ว ไม่ทำซ้ำ (กฎ: ห้ามทำลายข้อมูล)" };
-  }
-  initBrain(ROOT);
-  audit(ROOT, ACTOR, "brain_init", ROOT);
-  return { ok: true, root: ROOT };
+  const { created, root } = initBrain(ROOT);
+  audit(ROOT, ACTOR, "brain_init", root, `created=${created.length} items`);
+  return { ok: true, root, created, already_existed: created.length === 0 };
 }
 
-function handleCapture(args: { text: string; source?: string }): unknown {
+function handleCapture(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const id = newId();
+  const text = getString(args, "text");
+  if (!text) throw new Error("text ห้ามว่าง");
+  const domain = getString(args, "domain") ?? "general";
+  const now = today();
   const meta: NoteMeta = {
-    id,
+    id: genId(),
     type: "fleeting",
-    title: args.text.split("\n")[0]!.slice(0, 60),
-    created: isoNow(),
-    updated: isoNow(),
+    title: text.split(/\r?\n/)[0]?.slice(0, 80) ?? "fleeting",
+    created: now,
+    updated: now,
     aliases: [],
     tags: [],
-    domain: "inbox",
+    domain,
     privacy: "T0",
     state: "active",
     links: [],
-    evidence: args.source ? [args.source] : [],
+    evidence: [],
   };
-  const abs = path.join(ROOT, "00_Fleeting", `${id}.md`);
-  writeFileSync(abs, serializeFrontmatter(meta) + "\n" + args.text + "\n", "utf8");
-  appendManifest({
-    id, type: "fleeting", title: meta.title, path: rel(abs),
-    domain: "inbox", privacy: "T0", created: meta.created,
-  });
-  audit(ROOT, ACTOR, "brain_capture", rel(abs));
-  return { ok: true, id, path: rel(abs) };
+  const relPath = saveNote("00_Fleeting", meta, text, false);
+  audit(ROOT, ACTOR, "brain_capture", meta.id, `path=${relPath} domain=${domain}`);
+  return { ok: true, id: meta.id, path: relPath };
 }
 
-function handleWriteNote(args: {
-  title: string; body: string; type: string; domain?: string;
-  privacy?: string; tags?: string[]; aliases?: string[]; evidence?: string[];
-}): unknown {
+function handleWriteNote(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const type = args.type as (typeof NOTE_TYPES)[number];
-  if (!NOTE_TYPES.includes(type)) throw new Error(`type ต้องเป็น ${NOTE_TYPES.join("/")}`);
-  const needEvidence = type === "atomic" || type === "entity";
-  if (needEvidence && (!args.evidence || args.evidence.length === 0)) {
+  const title = getString(args, "title");
+  const body = getString(args, "body") ?? "";
+  const type = getString(args, "type") as NoteType | undefined;
+  if (!title) throw new Error("title ห้ามว่าง");
+  if (!type || !(NOTE_TYPES as readonly string[]).includes(type)) {
+    throw new Error(`type ต้องเป็น ${NOTE_TYPES.join("|")}`);
+  }
+  const evidence = normalizeStringArray(args.evidence);
+  // กฎ 3.1: atomic/entity ต้องมี evidence ≥ 1 ไม่ใช่ fleeting
+  if ((type === "atomic" || type === "entity") && evidence.length < 1) {
     throw new Error(
-      `กฎเหล็ก: โน้ต ${type} ต้องมี evidence ≥ 1 — ถ้ายังไม่มีหลักฐาน ใช้ type: fleeting แทน`,
+      `กฎเหล็ก: โน้ต type=${type} ต้องมี evidence อย่างน้อย 1 ข้อ — ` +
+        `ถ้ายังไม่มีหลักฐานให้ใช้ type: "fleeting" หรือแนบ evidence มาด้วย`,
     );
   }
-  const privacy = (args.privacy ?? "T0") as NoteMeta["privacy"];
-  if (!PRIVACY_LEVELS.includes(privacy)) throw new Error(`privacy ต้องเป็น ${PRIVACY_LEVELS.join("/")}`);
-  const id = newId();
-  const now = isoNow();
+  const privacy = (getString(args, "privacy") ?? "T0") as Privacy;
+  if (!(PRIVACY_LEVELS as readonly string[]).includes(privacy)) {
+    throw new Error(`privacy ต้องเป็น ${PRIVACY_LEVELS.join("|")}`);
+  }
+  const now = today();
   const meta: NoteMeta = {
-    id, type, title: args.title, created: now, updated: now,
-    aliases: args.aliases ?? [], tags: args.tags ?? [],
-    domain: args.domain ?? "general", privacy, state: "active",
-    links: [], evidence: args.evidence ?? [],
+    id: genId(),
+    type,
+    title,
+    created: now,
+    updated: now,
+    aliases: normalizeStringArray(args.aliases),
+    tags: normalizeStringArray(args.tags),
+    domain: getString(args, "domain") ?? "general",
+    privacy,
+    state: "active",
+    links: normalizeLinks(args.links),
+    evidence,
   };
-  const filename = `${id} - ${slugify(args.title)}.md`;
-  const abs = path.join(ROOT, "10_Notes", filename);
-  writeFileSync(abs, serializeFrontmatter(meta) + "\n" + args.body + "\n", "utf8");
-  appendManifest({ id, type, title: args.title, path: rel(abs), domain: meta.domain, privacy, created: now });
-  if (meta.aliases.length > 0) {
-    const aliases = readAliases(ROOT);
-    for (const a of meta.aliases) aliases[a] = id;
-    writeAliases(aliases);
+  const warnings: string[] = [];
+  const lt = title.trim().toLowerCase();
+  if (lt.startsWith("สรุป") || lt.startsWith("notes on")) {
+    warnings.push(`title "${title}" ดูไม่ใช่แนวคิด — โน้ตถาวรควรตั้งชื่อเป็นแนวคิด/ข้อเสนอ ไม่ใช่ "สรุป..." หรือ "notes on..."`);
   }
-  // auto-link จาก wikilinks ใน body
-  const manifest = readManifest(ROOT);
-  const aliases = readAliases(ROOT);
-  for (const target of extractWikilinks(args.body)) {
-    let toId: string | undefined;
-    if (manifest.has(target)) toId = target;
-    else if (aliases[target]) toId = aliases[target];
-    else {
-      for (const r of manifest.values()) if (r.title === target) { toId = r.id; break; }
-    }
-    if (toId) {
-      appendLink(ROOT, { from: id, to: toId, rel: "related" });
-      appendLink(ROOT, { from: toId, to: id, rel: "related" });
-      meta.links.push({ to: toId, rel: "related" });
-    }
-  }
-  if (meta.links.length > 0) {
-    writeFileSync(abs, serializeFrontmatter(meta) + "\n" + args.body + "\n", "utf8");
-  }
-  audit(ROOT, ACTOR, "brain_write_note", rel(abs), `type=${type} privacy=${privacy}`);
-  return { ok: true, id, path: rel(abs), linked: meta.links.length };
+  const relPath = saveNote("10_Notes", meta, body, true);
+  registerAliases(meta);
+  audit(ROOT, ACTOR, "brain_write_note", meta.id, `type=${type} path=${relPath}`);
+  return { ok: true, id: meta.id, path: relPath, warnings };
 }
 
-function handleUpdateNote(args: {
-  id_or_alias: string; title?: string; tags?: string[]; aliases?: string[];
-  state?: string; add_links?: { to: string; rel?: string }[];
-  add_evidence?: string[];
-}): unknown {
+function handleUpdateNote(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const found = findNote(args.id_or_alias);
-  if (!found) throw new Error(`ไม่พบโน้ต: ${args.id_or_alias}`);
-  const { absPath, meta, body } = found;
-  if (args.title) meta.title = args.title;
-  if (args.tags) meta.tags = args.tags;
-  if (args.aliases) {
-    const aliases = readAliases(ROOT);
-    for (const a of args.aliases) aliases[a] = meta.id;
-    writeAliases(aliases);
-    meta.aliases = [...new Set([...meta.aliases, ...args.aliases])];
-  }
-  if (args.state) {
-    if (!NOTE_STATES.includes(args.state as never)) throw new Error(`state ต้องเป็น ${NOTE_STATES.join("/")}`);
-    meta.state = args.state as NoteMeta["state"];
-  }
-  if (args.add_evidence) meta.evidence.push(...args.add_evidence);
-  if (args.add_links) {
-    const manifest = readManifest(ROOT);
-    const aliases = readAliases(ROOT);
-    for (const l of args.add_links) {
-      let toId = l.to;
-      if (!manifest.has(toId)) {
-        const via = aliases[toId];
-        if (via) toId = via;
-      }
-      if (!manifest.has(toId)) throw new Error(`ลิงก์ไปหา id ที่ไม่มีอยู่: ${l.to}`);
-      const relv = l.rel ?? "related";
-      appendLink(ROOT, { from: meta.id, to: toId, rel: relv });
-      appendLink(ROOT, { from: toId, to: meta.id, rel: relv });
-      meta.links.push({ to: toId, rel: relv });
+  const idArg = getString(args, "id");
+  if (!idArg) throw new Error("ต้องระบุ id");
+  const found = findNote(idArg);
+  if (!found) throw new Error(`ไม่พบโน้ต id=${idArg}`);
+  const { meta, relPath } = found;
+  let body = found.body;
+
+  // ห้ามแก้ id/created — ไม่มีฟิลด์เหล่านั้นใน input schema เลย
+  if (typeof args.body === "string") body = args.body;
+  const newTitle = getString(args, "title");
+  if (newTitle) meta.title = newTitle;
+  const newTags = args.tags !== undefined ? normalizeStringArray(args.tags) : undefined;
+  if (newTags) meta.tags = newTags;
+  const newAliases = args.aliases !== undefined ? normalizeStringArray(args.aliases) : undefined;
+  if (newAliases) meta.aliases = newAliases;
+  const newState = getString(args, "state") as NoteState | undefined;
+  if (newState) {
+    if (!(NOTE_STATES as readonly string[]).includes(newState)) {
+      throw new Error(`state ต้องเป็น ${NOTE_STATES.join("|")}`);
     }
+    meta.state = newState;
   }
-  meta.updated = isoNow();
-  writeFileSync(absPath, serializeFrontmatter(meta) + "\n" + body, "utf8");
-  audit(ROOT, ACTOR, "brain_update_note", rel(absPath));
-  return { ok: true, id: meta.id, path: rel(absPath) };
+  const addLinks = normalizeLinks(args.add_links);
+  for (const l of addLinks) {
+    if (!meta.links.some((x) => x.to === l.to && x.rel === l.rel)) meta.links.push(l);
+  }
+  const addEvidence = normalizeStringArray(args.add_evidence);
+  for (const e of addEvidence) {
+    if (!meta.evidence.includes(e)) meta.evidence.push(e);
+  }
+  meta.updated = today();
+
+  const oldAbs = path.join(ROOT, relPath);
+  const newRel = noteRelPath(relPath.split("/")[0] ?? "10_Notes", meta, !relPath.startsWith("00_Fleeting"));
+  const content = serializeNote({ meta, body });
+  atomicWrite(oldAbs, content);
+  let finalRel = relPath;
+  if (newRel !== relPath) {
+    renameSync(oldAbs, path.join(ROOT, newRel)); // rename เมื่อ title เปลี่ยน — id คงเดิม
+    finalRel = newRel;
+  }
+  upsertManifest(ROOT, {
+    id: meta.id,
+    path: finalRel,
+    type: meta.type,
+    title: meta.title,
+    domain: meta.domain,
+    privacy: meta.privacy,
+    created: meta.created,
+    updated: meta.updated,
+    sha256: sha256(content),
+  });
+  registerAliases(meta);
+  audit(ROOT, ACTOR, "brain_update_note", meta.id, `path=${finalRel}`);
+  return { ok: true, id: meta.id, path: finalRel, updated: meta.updated };
 }
 
-function handleRead(args: { id_or_alias: string }): unknown {
+function handleRead(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const found = findNote(args.id_or_alias);
-  if (!found) throw new Error(`ไม่พบโน้ต: ${args.id_or_alias}`);
+  const idOrAlias = getString(args, "id_or_alias");
+  if (!idOrAlias) throw new Error("ต้องระบุ id_or_alias");
+  const found = findNote(idOrAlias);
+  if (!found) throw new Error(`ไม่พบโน้ต: ${idOrAlias}`);
   enforceReadPrivacy(found.meta);
   return { id: found.meta.id, path: found.relPath, frontmatter: found.meta, body: found.body };
 }
 
-function handleSearch(args: { query: string; domain?: string; type?: string; include_private?: boolean }): unknown {
+interface SearchHit {
+  id: string;
+  title: string;
+  type: string;
+  domain: string;
+  privacy: string;
+  path: string;
+  snippet: string;
+}
+
+function handleSearch(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const q = args.query.toLowerCase();
-  const manifest = readManifest(ROOT);
+  const query = (getString(args, "query") ?? "").toLowerCase();
+  const domain = getString(args, "domain");
+  const type = getString(args, "type");
+  const tag = getString(args, "tag")?.toLowerCase();
   const includePrivate = args.include_private === true;
+
+  // privacy filter (กฎข้อ 6): default ไม่คืน T1/T2
   if (includePrivate) {
-    audit(ROOT, ACTOR, "brain_search_include_private", "*", `query=${args.query}`);
+    audit(ROOT, ACTOR, "brain_search_include_private", "*", `query=${query} domain=${domain ?? ""}`);
   }
-  const results: { id: string; title: string; type: string; domain: string; privacy: string; score: number }[] = [];
+  const manifest = readManifest(ROOT);
+  const hits: SearchHit[] = [];
   for (const rec of manifest.values()) {
     if (!includePrivate && (rec.privacy === "T1" || rec.privacy === "T2")) continue;
     // T2 ไม่โผล่ใน search แม้ include_private=true จนกว่าป๊าจะอนุมัติเป็นรายใบ
     if (includePrivate && rec.privacy === "T2" && !isApproved(rec.id)) continue;
-    if (args.domain && rec.domain !== args.domain) continue;
-    if (args.type && rec.type !== args.type) continue;
+    if (domain && rec.domain !== domain) continue;
+    if (type && rec.type !== type) continue;
     const abs = path.join(ROOT, rec.path);
     if (!existsSync(abs)) continue;
-    const parsed = parseNoteFile(readFileSync(abs, "utf8"));
-    const hay = `${rec.title}\n${parsed.meta.aliases.join(" ")}\n${parsed.meta.tags.join(" ")}\n${parsed.body}`.toLowerCase();
-    if (hay.includes(q)) {
-      let score = 1;
-      if (rec.title.toLowerCase().includes(q)) score += 2;
-      if (parsed.meta.aliases.some((a) => a.toLowerCase().includes(q))) score += 2;
-      results.push({ id: rec.id, title: rec.title, type: rec.type, domain: rec.domain, privacy: rec.privacy, score });
+    let parsed: ParsedNote;
+    try {
+      parsed = parseNoteFile(readFileSync(abs, "utf8"));
+    } catch {
+      continue;
     }
+    if (tag && !parsed.meta.tags.some((t) => t.toLowerCase() === tag)) continue;
+    let snippet = "";
+    if (query) {
+      const inTitle = parsed.meta.title.toLowerCase().includes(query);
+      const inAliases = parsed.meta.aliases.some((a) => a.toLowerCase().includes(query));
+      const inTags = parsed.meta.tags.some((t) => t.toLowerCase().includes(query));
+      const bodyIdx = parsed.body.toLowerCase().indexOf(query);
+      if (!inTitle && !inAliases && !inTags && bodyIdx < 0) continue;
+      if (bodyIdx >= 0) {
+        const start = Math.max(0, bodyIdx - 40);
+        snippet = parsed.body.slice(start, bodyIdx + 80).replace(/\s+/g, " ").trim();
+      } else {
+        snippet = parsed.body.slice(0, 120).replace(/\s+/g, " ").trim();
+      }
+    } else {
+      snippet = parsed.body.slice(0, 120).replace(/\s+/g, " ").trim();
+    }
+    hits.push({
+      id: rec.id,
+      title: parsed.meta.title,
+      type: rec.type,
+      domain: rec.domain,
+      privacy: rec.privacy,
+      path: rec.path,
+      snippet,
+    });
   }
-  results.sort((a, b) => b.score - a.score);
-  audit(ROOT, ACTOR, "brain_search", "*", `query=${args.query} hits=${results.length}`);
-  return { ok: true, count: results.length, results };
+  return { ok: true, count: hits.length, include_private: includePrivate, results: hits };
 }
 
-function handleLink(args: { from_id: string; to_id: string; rel?: string }): unknown {
+function handleLink(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const manifest = readManifest(ROOT);
-  if (!manifest.has(args.from_id)) throw new Error(`ไม่มี id: ${args.from_id}`);
-  if (!manifest.has(args.to_id)) throw new Error(`ไม่มี id: ${args.to_id}`);
-  const relv = args.rel ?? "related";
-  appendLink(ROOT, { from: args.from_id, to: args.to_id, rel: relv });
-  appendLink(ROOT, { from: args.to_id, to: args.from_id, rel: relv });
-  for (const id of [args.from_id, args.to_id]) {
-    const other = id === args.from_id ? args.to_id : args.from_id;
-    const rec = manifest.get(id)!;
-    const abs = path.join(ROOT, rec.path);
-    if (existsSync(abs)) {
-      const parsed = parseNoteFile(readFileSync(abs, "utf8"));
-      parsed.meta.links.push({ to: other, rel: relv });
-      parsed.meta.updated = isoNow();
-      writeFileSync(abs, serializeFrontmatter(parsed.meta) + "\n" + parsed.body, "utf8");
+  const fromArg = getString(args, "from_id");
+  const toArg = getString(args, "to_id");
+  if (!fromArg || !toArg) throw new Error("ต้องระบุ from_id และ to_id");
+  const rel = getString(args, "rel") ?? "related";
+  const fromNote = findNote(fromArg);
+  const toNote = findNote(toArg);
+  if (!fromNote) throw new Error(`ไม่พบโน้ต from: ${fromArg}`);
+  if (!toNote) throw new Error(`ไม่พบโน้ต to: ${toArg}`);
+  const fromId = fromNote.meta.id;
+  const toId = toNote.meta.id;
+
+  // dedup links.jsonl — ลิงก์เดิม (from/to/rel ทั้งสองทิศ) ไม่ append ซ้ำ
+  const dup = readLinks(ROOT).some(
+    (l) => (l.from === fromId && l.to === toId && l.rel === rel) || (l.from === toId && l.to === fromId && l.rel === rel),
+  );
+  if (!dup) appendLink(ROOT, { from: fromId, to: toId, rel, created: today(), by: ACTOR });
+
+  // อัพเดท links ในไฟล์ทั้งสองใบ
+  for (const [note, targetId] of [
+    [fromNote, toId],
+    [toNote, fromId],
+  ] as const) {
+    if (!note.meta.links.some((l) => l.to === targetId && l.rel === rel)) {
+      note.meta.links.push({ to: targetId, rel });
     }
+    note.meta.updated = today();
+    const abs = path.join(ROOT, note.relPath);
+    const content = serializeNote({ meta: note.meta, body: note.body });
+    atomicWrite(abs, content);
+    upsertManifest(ROOT, {
+      id: note.meta.id,
+      path: note.relPath,
+      type: note.meta.type,
+      title: note.meta.title,
+      domain: note.meta.domain,
+      privacy: note.meta.privacy,
+      created: note.meta.created,
+      updated: note.meta.updated,
+      sha256: sha256(content),
+    });
   }
-  audit(ROOT, ACTOR, "brain_link", `${args.from_id} -> ${args.to_id}`, `rel=${relv}`);
-  return { ok: true, from: args.from_id, to: args.to_id, rel: relv };
+  audit(ROOT, ACTOR, "brain_link", `${fromId} -> ${toId}`, `rel=${rel}`);
+  return { ok: true, from: fromId, to: toId, rel, deduped: dup };
 }
 
-function handleResolve(args: { name: string }): unknown {
+function handleResolve(args: Record<string, unknown>): unknown {
   ensureBrain();
-  if (ID_RE.test(args.name)) {
-    const manifest = readManifest(ROOT);
-    if (manifest.has(args.name)) return { id: args.name, via: "id" };
-  }
+  const name = getString(args, "name");
+  if (!name) throw new Error("ต้องระบุ name");
+  // 1. alias exact
   const aliases = readAliases(ROOT);
-  if (aliases[args.name]) return { id: aliases[args.name], via: "alias" };
+  if (aliases[name]) {
+    return { ok: true, id: aliases[name], via: "alias_exact" };
+  }
   const manifest = readManifest(ROOT);
-  for (const r of manifest.values()) {
-    if (r.title === args.name) return { id: r.id, via: "title" };
+  // 2. title exact
+  for (const rec of manifest.values()) {
+    if (rec.title === name) return { ok: true, id: rec.id, via: "title_exact" };
   }
-  const q = args.name.toLowerCase();
-  const fuzzy: string[] = [];
+  // 3. fuzzy contains (alias ก่อน แล้ว title)
+  const needle = name.toLowerCase();
+  const matches: { id: string; matched: string; via: string }[] = [];
   for (const [alias, id] of Object.entries(aliases)) {
-    if (alias.toLowerCase().includes(q)) fuzzy.push(id);
+    if (alias.toLowerCase().includes(needle)) matches.push({ id, matched: alias, via: "alias_fuzzy" });
   }
-  for (const r of manifest.values()) {
-    if (r.title.toLowerCase().includes(q)) fuzzy.push(r.id);
+  for (const rec of manifest.values()) {
+    if (rec.title.toLowerCase().includes(needle)) matches.push({ id: rec.id, matched: rec.title, via: "title_fuzzy" });
   }
-  if (fuzzy.length === 0) throw new Error(`resolve ไม่เจอ: ${args.name}`);
-  return { id: fuzzy[0], via: "fuzzy", candidates: [...new Set(fuzzy)] };
+  if (matches.length === 0) return { ok: false, error: `ไม่พบ "${name}"`, matches: [] };
+  return { ok: true, id: matches[0]?.id, via: matches[0]?.via, matches };
 }
 
 // ---------- pack provenance ----------
@@ -453,22 +599,19 @@ function handleNightly(): unknown {
 function handleHealth(): unknown {
   ensureBrain();
   const manifest = readManifest(ROOT);
-  const linksFile = kbPath(ROOT, "links.jsonl");
   const known = new Set(manifest.keys());
-  const connected = new Set<string>();
+  const connected = new Map<string, boolean>();
   const dead = new Set<string>();
+
+  const markConn = (a: string, b: string) => {
+    if (known.has(a)) connected.set(a, true);
+    if (known.has(b)) connected.set(b, true);
+  };
   // จาก links.jsonl
-  if (existsSync(linksFile)) {
-    for (const line of readFileSync(linksFile, "utf8").split("\n")) {
-      if (!line.trim()) continue;
-      try {
-        const l = JSON.parse(line) as { from: string; to: string; rel: string };
-        if (!known.has(l.to)) dead.add(`${l.from} -> ${l.to} (${l.rel})`);
-        else { connected.add(l.from); connected.add(l.to); }
-      } catch { /* ข้ามบรรทัดพัง */ }
-    }
+  for (const l of readLinks(ROOT)) {
+    if (!known.has(l.to)) dead.add(`${l.from} -> ${l.to} (${l.rel})`);
+    else markConn(l.from, l.to);
   }
-  const markConn = (a: string, b: string) => { connected.add(a); connected.add(b); };
   // จาก links ใน frontmatter ของแต่ละไฟล์
   for (const rec of manifest.values()) {
     const abs = path.join(ROOT, rec.path);
@@ -514,9 +657,15 @@ function handleHealth(): unknown {
       // ข้ามไฟล์ที่ parse ไม่ได้
     }
   }
+  // fleeting ที่ยังไม่ลิงก์ไม่นับ orphan — inbox ค้างเป็นเรื่องปกติ ไม่ใช่ปัญหาโครงสร้าง
+  const fleetingIds = new Set<string>();
+  for (const rec of manifest.values()) if (rec.type === "fleeting") fleetingIds.add(rec.id);
   const orphans: string[] = [];
+  let orphansFleeting = 0;
   for (const id of known.keys()) {
-    if (!connected.has(id)) orphans.push(id);
+    if (connected.has(id)) continue;
+    if (fleetingIds.has(id)) orphansFleeting++;
+    else orphans.push(id);
   }
   // packs ที่ยังไม่ผ่านรีวิว/ถูกแก้หลังรีวิว (provenance)
   const packsUnverified = scanPacks()
@@ -525,6 +674,7 @@ function handleHealth(): unknown {
   const report: HealthReport = {
     checked_at: new Date().toISOString(),
     orphans: orphans.sort(),
+    orphans_fleeting: orphansFleeting,
     dead_links: [...dead].sort(),
     dead_body_links: [...deadBody].sort(),
     packs_unverified: packsUnverified.sort(),
@@ -535,18 +685,17 @@ function handleHealth(): unknown {
   return { ok: true, ...report };
 }
 
-function today(): string {
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
 function handleHome(): unknown {
   ensureBrain();
+  const homePath = path.join(ROOT, "20_Atlas", "Home.md");
+  const todayPath = path.join(ROOT, "20_Atlas", "Today.md");
+  const home = existsSync(homePath) ? readFileSync(homePath, "utf8") : "";
+
+  // รีเฟรช Today.md: โน้ต state:active + fleeting 24h ล่าสุด
   const manifest = readManifest(ROOT);
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   const active: ManifestRecord[] = [];
   const recentFleeting: ManifestRecord[] = [];
-  const cutoff = Date.now() - 24 * 3600 * 1000;
   for (const rec of manifest.values()) {
     if (rec.privacy === "T2") continue; // T2 ห้ามขึ้น Today.md ทุกประเภท
     if (rec.type === "fleeting") {
@@ -571,155 +720,234 @@ function handleHome(): unknown {
       // ข้าม
     }
   }
-  const homePath = path.join(ROOT, "20_Atlas", "Home.md");
-  const home = existsSync(homePath) ? readFileSync(homePath, "utf8") : "";
   const lines: string[] = [
     `# Today — ${today()}`,
     "",
     `## Active notes (${active.length})`,
   ];
   for (const r of active) lines.push(`- [[${r.id}]] ${r.title} _(${r.type}/${r.domain})_`);
-  lines.push("", `## Fleeting 24h (${recentFleeting.length})`);
+  if (active.length === 0) lines.push("- (ยังไม่มี)");
+  lines.push("", `## Fleeting 24h ล่าสุด (${recentFleeting.length})`);
   for (const r of recentFleeting) lines.push(`- [[${r.id}]] ${r.title}`);
-  const todayContent = lines.join("\n") + "\n";
-  const todayPath = path.join(ROOT, "20_Atlas", "Today.md");
-  writeFileSync(todayPath + ".tmp", todayContent, "utf8");
-  renameSync(todayPath + ".tmp", todayPath); // atomic write
-  audit(ROOT, ACTOR, "brain_home", "20_Atlas/Today.md", `active=${active.length} fleeting24h=${recentFleeting.length}`);
+  if (recentFleeting.length === 0) lines.push("- (ไม่มี)");
+  lines.push("");
+  const todayContent = lines.join("\n");
+  atomicWrite(todayPath, todayContent);
   return { ok: true, home, today: todayContent };
 }
 
-function handleAudit(args: { last?: number }): unknown {
+function handleAudit(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const f = kbPath(ROOT, "audit.jsonl");
-  const n = args.last ?? 20;
-  if (!existsSync(f)) return { ok: true, entries: [] };
-  const lines = readFileSync(f, "utf8").split("\n").filter(Boolean);
-  const tail = lines.slice(-n).map((l) => JSON.parse(l) as unknown);
-  return { ok: true, count: tail.length, entries: tail };
+  const rawLimit = args.limit;
+  const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : 20;
+  const all = readAudit(ROOT);
+  return { ok: true, count: Math.min(limit, all.length), entries: all.slice(-limit) };
 }
 
-// ---------- server ----------
+// ---------- tool schemas ----------
 
-const server = new McpServer({ name: "central-brain", version: "1.0.0" });
-
-const tools: {
-  name: string;
-  description: string;
-  schema: z.ZodRawShape;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  handler: (args: any) => unknown;
-}[] = [
+const TOOLS = [
   {
     name: "brain_init",
-    description: "สร้างโครงสร้างสมองใหม่ (idempotent — ถ้ามีแล้วไม่ทำซ้ำ ห้ามทำลายข้อมูล)",
-    schema: {},
-    handler: () => handleInit(),
+    description: "สร้างโครงสร้างโฟลเดอร์ Central Brain + ไฟล์ kernel เปล่า + skeleton packs + Home.md/Today.md",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "brain_capture",
-    description: "จดด่วนลง 00_Fleeting — เบาที่สุด ไม่ validate (ของเปล่า=ช่องโหว่ อย่าใช้เก็บของเปล่า)",
-    schema: { text: z.string(), source: z.string().optional() },
-    handler: handleCapture,
+    description: "จดด่วนลง 00_Fleeting (เบาที่สุด ไม่ validate)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        text: { type: "string", description: "ข้อความที่จะจด" },
+        domain: { type: "string", description: "domain (default: general)" },
+      },
+      required: ["text"],
+      additionalProperties: false,
+    },
   },
   {
     name: "brain_write_note",
-    description: "เขียนโน้ตถาวรลง 10_Notes — atomic/entity ต้องมี evidence≥1 (กฎเหล็ก)",
-    schema: {
-      title: z.string(), body: z.string(),
-      type: z.enum(NOTE_TYPES), domain: z.string().optional(),
-      privacy: z.enum(PRIVACY_LEVELS).optional(),
-      tags: z.array(z.string()).optional(), aliases: z.array(z.string()).optional(),
-      evidence: z.array(z.string()).optional(),
+    description: "เขียนโน้ตถาวรลง 10_Notes — atomic/entity ต้องมี evidence ≥ 1",
+    inputSchema: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        body: { type: "string" },
+        type: { type: "string", enum: [...NOTE_TYPES] },
+        domain: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        aliases: { type: "array", items: { type: "string" } },
+        privacy: { type: "string", enum: [...PRIVACY_LEVELS] },
+        links: {
+          type: "array",
+          items: {
+            anyOf: [
+              { type: "string" },
+              {
+                type: "object",
+                properties: { to: { type: "string" }, rel: { type: "string" } },
+                required: ["to"],
+              },
+            ],
+          },
+        },
+        evidence: { type: "array", items: { type: "string" } },
+      },
+      required: ["title", "body", "type"],
+      additionalProperties: false,
     },
-    handler: handleWriteNote,
   },
   {
     name: "brain_update_note",
-    description: "แก้ฟิลด์ที่ส่งเท่านั้น — ห้ามแก้ id/created; โน้ตไม่ย้ายตามสถานะ ย้ายคือฆ่า reference",
-    schema: {
-      id_or_alias: z.string(),
-      title: z.string().optional(), tags: z.array(z.string()).optional(),
-      aliases: z.array(z.string()).optional(),
-      state: z.enum(NOTE_STATES).optional(),
-      add_links: z.array(z.object({ to: z.string(), rel: z.string().optional() })).optional(),
-      add_evidence: z.array(z.string()).optional(),
+    description: "แก้เฉพาะฟิลด์ที่ส่งของโน้ต (ห้ามแก้ id/created)",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        body: { type: "string" },
+        title: { type: "string" },
+        tags: { type: "array", items: { type: "string" } },
+        aliases: { type: "array", items: { type: "string" } },
+        state: { type: "string", enum: [...NOTE_STATES] },
+        add_links: {
+          type: "array",
+          items: {
+            anyOf: [
+              { type: "string" },
+              {
+                type: "object",
+                properties: { to: { type: "string" }, rel: { type: "string" } },
+                required: ["to"],
+              },
+            ],
+          },
+        },
+        add_evidence: { type: "array", items: { type: "string" } },
+      },
+      required: ["id"],
+      additionalProperties: false,
     },
-    handler: handleUpdateNote,
   },
   {
     name: "brain_read",
     description: "อ่านโน้ต (frontmatter + body) — T1 ถูก audit ทุกครั้ง / T2 ต้องมีไฟล์อนุมัติจากป๊าที่ .kb/approvals/<id>.json ก่อน ไม่งั้นถูกบล็อก",
-    schema: { id_or_alias: z.string() },
-    handler: handleRead,
+    inputSchema: {
+      type: "object",
+      properties: { id_or_alias: { type: "string" } },
+      required: ["id_or_alias"],
+      additionalProperties: false,
+    },
   },
   {
     name: "brain_search",
     description: "ค้นจาก title/aliases/tags/body — default ไม่คืน T1/T2 (include_private=true คืน T1 และถูก audit / T2 ไม่คืนจนกว่าป๊าจะอนุมัติที่ .kb/approvals/<id>.json)",
-    schema: {
-      query: z.string(), domain: z.string().optional(), type: z.string().optional(),
-      include_private: z.boolean().optional(),
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        domain: { type: "string" },
+        type: { type: "string" },
+        tag: { type: "string" },
+        include_private: { type: "boolean" },
+      },
+      additionalProperties: false,
     },
-    handler: handleSearch,
   },
   {
     name: "brain_link",
-    description: "สร้างลิงก์สองทิศระหว่างสอง id + append links.jsonl (เช็ค id มีจริงก่อน)",
-    schema: { from_id: z.string(), to_id: z.string(), rel: z.string().optional() },
-    handler: handleLink,
+    description: "สร้างลิงก์สองทิศระหว่างโน้ต + append links.jsonl",
+    inputSchema: {
+      type: "object",
+      properties: {
+        from_id: { type: "string" },
+        to_id: { type: "string" },
+        rel: { type: "string" },
+      },
+      required: ["from_id", "to_id"],
+      additionalProperties: false,
+    },
   },
   {
     name: "brain_resolve",
-    description: "คืน id จาก alias/title (exact ก่อน → fuzzy contains)",
-    schema: { name: z.string() },
-    handler: handleResolve,
+    description: "คืน id ที่ match alias/title (exact ก่อน แล้ว fuzzy contains)",
+    inputSchema: {
+      type: "object",
+      properties: { name: { type: "string" } },
+      required: ["name"],
+      additionalProperties: false,
+    },
   },
   {
     name: "brain_list_packs",
     description: "list domain packs ใน .kb/packs + provenance status (verified/modified/unreviewed เทียบ .kb/packs.lock.json ที่ป๊าล็อกด้วยมือ)",
-    schema: {},
-    handler: () => handleListPacks(),
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "brain_health",
-    description: "คำนวณ orphans/dead_links (links.jsonl + frontmatter links) เขียน health.json",
-    schema: {},
-    handler: () => handleHealth(),
+    description: "คำนวณ orphans/dead_links เขียน health.json + คืนผล",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "brain_home",
-    description: "คืน Home.md + Today.md (รีเฟรช Today จาก active notes + fleeting 24h, atomic write)",
-    schema: {},
-    handler: () => handleHome(),
+    description: "คืน Home.md + Today.md (รีเฟรช Today จาก active notes + fleeting 24h)",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "brain_nightly",
     description: "วงจรกลางคืน: คืน fleeting queue ที่ยังไม่จัด + regenerate Today.md + health ครบ + snapshot ลง 99_System/snapshots — agent เรียกตอนเช้า/ก่อนนอน แล้วใช้ queue classify ต่อด้วย brain_write_note",
-    schema: {},
-    handler: () => handleNightly(),
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
     name: "brain_audit",
     description: "คืน audit log ล่าสุด N รายการ",
-    schema: { last: z.number().optional() },
-    handler: handleAudit,
-  },
-];
-
-for (const t of tools) {
-  server.registerTool(
-    t.name,
-    { description: t.description, inputSchema: t.schema },
-    async (args) => {
-      try {
-        return ok(t.handler(args));
-      } catch (err) {
-        return fail(err instanceof Error ? err.message : String(err));
-      }
+    inputSchema: {
+      type: "object",
+      properties: { limit: { type: "number" } },
+      additionalProperties: false,
     },
-  );
+  },
+] as const;
+
+// ---------- server ----------
+
+const server = new Server(
+  { name: "central-brain-mcp-server", version: "1.0.0" },
+  { capabilities: { tools: {} } },
+);
+
+server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
+
+server.setRequestHandler(CallToolRequestSchema, (request) => {
+  const { name, arguments: args = {} } = request.params;
+  try {
+    switch (name) {
+      case "brain_init": return ok(handleInit());
+      case "brain_capture": return ok(handleCapture(args));
+      case "brain_write_note": return ok(handleWriteNote(args));
+      case "brain_update_note": return ok(handleUpdateNote(args));
+      case "brain_read": return ok(handleRead(args));
+      case "brain_search": return ok(handleSearch(args));
+      case "brain_link": return ok(handleLink(args));
+      case "brain_resolve": return ok(handleResolve(args));
+      case "brain_list_packs": return ok(handleListPacks());
+      case "brain_health": return ok(handleHealth());
+      case "brain_home": return ok(handleHome());
+      case "brain_nightly": return ok(handleNightly());
+      case "brain_audit": return ok(handleAudit(args));
+      default: return fail(`ไม่รู้จัก tool: ${name}`);
+    }
+  } catch (err) {
+    return fail(err instanceof Error ? err.message : String(err));
+  }
+});
+
+async function main(): Promise<void> {
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  console.error(`central-brain-mcp-server ready (root=${ROOT})`);
 }
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error(`central-brain MCP ready — root: ${ROOT}`);
+main().catch((err) => {
+  console.error("fatal:", err);
+  process.exit(1);
+});
