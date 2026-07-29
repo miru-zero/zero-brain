@@ -8,6 +8,10 @@ export const NOTE_TYPES = ["fleeting", "atomic", "entity", "moc", "log", "source
 export const PRIVACY_LEVELS = ["T0", "T1", "T2"] as const;
 export const NOTE_STATES = ["active", "supporting", "archive"] as const;
 
+export type NoteType = (typeof NOTE_TYPES)[number];
+export type Privacy = (typeof PRIVACY_LEVELS)[number];
+export type NoteState = (typeof NOTE_STATES)[number];
+
 export interface NoteLink {
   to: string;
   rel: string;
@@ -36,7 +40,7 @@ export interface ParsedNote {
 
 /** parse frontmatter แบบจำกัด: key: value / key: [a, b] / key:\n  - item */
 export function parseNoteFile(text: string): ParsedNote {
-  const m = /^---\n(.*?)\n---\n([\s\S]*)$/.exec(text);
+  const m = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/.exec(text);
   if (!m) throw new Error("ไม่พบ frontmatter (---)");
   const [, fm, body] = m;
   const meta = parseFrontmatter(fm!);
@@ -154,4 +158,32 @@ export function extractWikilinks(body: string): string[] {
     if (target) out.add(target);
   }
   return [...out];
+}
+
+/** วันที่ท้องถิ่นรูปแบบ YYYY-MM-DD */
+export function today(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function randomSuffix(): string {
+  return Math.random().toString(36).slice(2, 6).padEnd(4, "0");
+}
+
+/** id โน้ตรูปแบบ YYYYMMDD-HHMMSS-xxxx (เวลาท้องถิ่น + suffix สุ่ม) */
+export function genId(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}-${randomSuffix()}`;
+}
+
+/** slug สำหรับชื่อไฟล์โน้ต (alias ของ slugify เดิม) */
+export function sanitizeSlug(title: string): string {
+  return slugify(title);
+}
+
+/** serialize โน้ตทั้งไฟล์: frontmatter + body (normalize newline ท้าย body) */
+export function serializeNote(note: { meta: NoteMeta; body: string }): string {
+  return serializeFrontmatter(note.meta) + "\n" + note.body.replace(/\n+$/, "") + "\n";
 }
