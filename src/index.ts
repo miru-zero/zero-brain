@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /**
- * Central Brain MCP Server (v1.2.1)
+ * Central Brain MCP Server (v2.0.0)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
  * (.kb/approvals/<id>.json สร้างด้วยมือเท่านั้น — agent อนุมัติตัวเองไม่ได้) /
  * health สแกน body wikilinks ด้วย / ทุก mutation audit
+ *
+ * v2.0.0 — tools เปลี่ยนชื่อเป็น zero_* (เดิม brain_*) + ลดโทเค็น:
+ * compact JSON responses / search limit+offset / health คืน counts+top20 /
+ * home ไม่คืน Home.md ตาม default / Today.md cap 30 active / nightly queue cap 50
  */
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
@@ -51,20 +55,31 @@ import {
 const ROOT = brainRoot();
 const ACTOR = process.env.CENTRAL_BRAIN_ACTOR ?? "central-brain-mcp";
 
+// เพดานป้องกัน response บวม (โทเค็น) — ค่าเต็มอยู่ในไฟล์ .kb/ เสมอ
+const SEARCH_DEFAULT_LIMIT = 10;
+const HEALTH_TOP_N = 20;
+const TODAY_MAX_ACTIVE = 30;
+const NIGHTLY_MAX_QUEUE = 50;
+
 // ---------- helpers ----------
 
 function ok(result: unknown): { content: { type: "text"; text: string }[] } {
-  return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  // compact JSON — ประหยัดโทเค็น ~25-35% ต่อ response เทียบ pretty-print
+  return { content: [{ type: "text", text: JSON.stringify(result) }] };
 }
 
 function fail(message: string): { isError: true; content: { type: "text"; text: string }[] } {
-  return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: message }, null, 2) }] };
+  return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: message }) }] };
 }
 
 function ensureBrain(): void {
   if (!isInitialized(ROOT)) {
-    throw new Error(`Brain ยังไม่ได้ init ที่ ${ROOT} — เรียก brain_init ก่อน`);
+    throw new Error(`Brain ยังไม่ได้ init ที่ ${ROOT} — เรียก zero_init ก่อน`);
   }
+}
+
+function clampInt(v: unknown, fallback: number): number {
+  return typeof v === "number" && Number.isFinite(v) && v >= 0 ? Math.floor(v) : fallback;
 }
 
 // ---------- privacy approval gate (T2) ----------
@@ -381,6 +396,8 @@ function handleSearch(args: Record<string, unknown>): unknown {
   const type = getString(args, "type");
   const tag = getString(args, "tag")?.toLowerCase();
   const includePrivate = args.include_private === true;
+  const limit = clampInt(args.limit, SEARCH_DEFAULT_LIMIT) || SEARCH_DEFAULT_LIMIT;
+  const offset = clampInt(args.offset, 0);
 
   // privacy filter (กฎข้อ 6): default ไม่คืน T1/T2
   if (includePrivate) {
@@ -429,7 +446,16 @@ function handleSearch(args: Record<string, unknown>): unknown {
       snippet,
     });
   }
-  return { ok: true, count: hits.length, include_private: includePrivate, results: hits };
+  // คืน top-N เสมอ — total บอกจำนวนเต็ม agent เลื่อน offset เองได้ (กัน response บวมเมื่อสมองโต)
+  return {
+    ok: true,
+    total: hits.length,
+    count: Math.max(0, Math.min(limit, hits.length - offset)),
+    limit,
+    offset,
+    include_private: includePrivate,
+    results: hits.slice(offset, offset + limit),
+  };
 }
 
 function handleLink(args: Record<string, unknown>): unknown {
@@ -559,7 +585,7 @@ function handleListPacks(): unknown {
 function handleNightly(): unknown {
   ensureBrain();
   const manifest = readManifest(ROOT);
-  // 1. fleeting queue: โน้ต fleeting ที่ยัง active (ยังไม่ถูกจัด) — agent เป็นคน classify ต่อ
+  // 1. fleeting queue: โน้ต fleeting ที่ยัง active (ยังไม่จัด) — agent เป็นคน classify ต่อ
   const queue: { id: string; title: string; created: string }[] = [];
   for (const rec of manifest.values()) {
     if (rec.type !== "fleeting" || rec.privacy === "T2") continue;
@@ -574,26 +600,33 @@ function handleNightly(): unknown {
       // ข้ามไฟล์ที่ parse ไม่ได้
     }
   }
-  // 2. regenerate Today.md (ผ่าน logic ของ brain_home)
-  handleHome();
+  // 2. regenerate Today.md (ผ่าน logic ของ zero_home)
+  handleHome({});
   // 3. health check ครบ (frontmatter + body links + packs)
-  const health = handleHealth() as { notes: number; orphans: string[]; dead_links: string[]; dead_body_links: string[]; packs_unverified: string[] };
+  const health = handleHealth() as { notes: number; counts: { orphans: number; dead_links: number; dead_body_links: number; packs_unverified: number } };
   // 4. snapshot ลง 99_System/snapshots/<วันที่>.json
   const snapDir = path.join(ROOT, "99_System", "snapshots");
   mkdirSync(snapDir, { recursive: true });
   const snapshot = {
     date: today(),
     notes: health.notes,
-    orphans: health.orphans.length,
-    dead_links: health.dead_links.length,
-    dead_body_links: health.dead_body_links.length,
-    packs_unverified: health.packs_unverified.length,
+    orphans: health.counts.orphans,
+    dead_links: health.counts.dead_links,
+    dead_body_links: health.counts.dead_body_links,
+    packs_unverified: health.counts.packs_unverified,
     fleeting_pending: queue.length,
   };
   const snapPath = path.join(snapDir, `${today()}.json`);
   writeFileSync(snapPath, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
   audit(ROOT, ACTOR, "brain_nightly", `99_System/snapshots/${today()}.json`, `pending=${queue.length} notes=${health.notes}`);
-  return { ok: true, fleeting_queue: queue, snapshot, snapshot_path: rel(snapPath) };
+  // queue cap — ถ้าค้างเยอะ agent ทยอยจัด ไม่ดึงทั้งก้อนเข้า context
+  return {
+    ok: true,
+    fleeting_queue: queue.slice(0, NIGHTLY_MAX_QUEUE),
+    queue_total: queue.length,
+    snapshot,
+    snapshot_path: rel(snapPath),
+  };
 }
 
 function handleHealth(): unknown {
@@ -680,12 +713,34 @@ function handleHealth(): unknown {
     packs_unverified: packsUnverified.sort(),
     notes: known.size,
   };
-  writeHealth(ROOT, report);
+  writeHealth(ROOT, report); // เต็มทุกรายการอยู่ใน .kb/health.json
   audit(ROOT, ACTOR, "brain_health", ".kb/health.json", `notes=${report.notes} orphans=${orphans.length} dead=${dead.size} dead_body=${deadBody.size}`);
-  return { ok: true, ...report };
+  // response คืนแบบ slim: counts + top-N — กัน list ยาวหลายพันเข้า context ตอนสมองโต
+  const top = (arr: string[]): string[] => arr.slice(0, HEALTH_TOP_N);
+  return {
+    ok: true,
+    notes: report.notes,
+    orphans_fleeting: orphansFleeting,
+    counts: {
+      orphans: report.orphans.length,
+      dead_links: report.dead_links.length,
+      dead_body_links: report.dead_body_links.length,
+      packs_unverified: report.packs_unverified.length,
+    },
+    orphans: top(report.orphans),
+    dead_links: top(report.dead_links),
+    dead_body_links: top(report.dead_body_links),
+    packs_unverified: top(report.packs_unverified),
+    truncated:
+      report.orphans.length > HEALTH_TOP_N ||
+      report.dead_links.length > HEALTH_TOP_N ||
+      report.dead_body_links.length > HEALTH_TOP_N ||
+      report.packs_unverified.length > HEALTH_TOP_N,
+    health_path: ".kb/health.json",
+  };
 }
 
-function handleHome(): unknown {
+function handleHome(args: Record<string, unknown>): unknown {
   ensureBrain();
   const homePath = path.join(ROOT, "20_Atlas", "Home.md");
   const todayPath = path.join(ROOT, "20_Atlas", "Today.md");
@@ -725,7 +780,9 @@ function handleHome(): unknown {
     "",
     `## Active notes (${active.length})`,
   ];
-  for (const r of active) lines.push(`- [[${r.id}]] ${r.title} _(${r.type}/${r.domain})_`);
+  // cap จำนวนที่ลง Today.md — atlas ถูกอ่านทุก session ห้ามบวมตามจำนวนโน้ต
+  for (const r of active.slice(0, TODAY_MAX_ACTIVE)) lines.push(`- [[${r.id}]] ${r.title} _(${r.type}/${r.domain})_`);
+  if (active.length > TODAY_MAX_ACTIVE) lines.push(`- …และอีก ${active.length - TODAY_MAX_ACTIVE} ใบ (ค้นต่อด้วย zero_search)`);
   if (active.length === 0) lines.push("- (ยังไม่มี)");
   lines.push("", `## Fleeting 24h ล่าสุด (${recentFleeting.length})`);
   for (const r of recentFleeting) lines.push(`- [[${r.id}]] ${r.title}`);
@@ -733,13 +790,20 @@ function handleHome(): unknown {
   lines.push("");
   const todayContent = lines.join("\n");
   atomicWrite(todayPath, todayContent);
-  return { ok: true, home, today: todayContent };
+  // ไม่คืน Home.md ตาม default — Home โตเรื่อยๆ ให้ขอเองด้วย include_home=true
+  const includeHome = args?.include_home === true;
+  return {
+    ok: true,
+    today: todayContent,
+    home_path: "20_Atlas/Home.md",
+    home_chars: home.length,
+    ...(includeHome ? { home } : {}),
+  };
 }
 
 function handleAudit(args: Record<string, unknown>): unknown {
   ensureBrain();
-  const rawLimit = args.limit;
-  const limit = typeof rawLimit === "number" && Number.isFinite(rawLimit) && rawLimit > 0 ? Math.floor(rawLimit) : 20;
+  const limit = clampInt(args.limit, 20) || 20;
   const all = readAudit(ROOT);
   return { ok: true, count: Math.min(limit, all.length), entries: all.slice(-limit) };
 }
@@ -748,12 +812,12 @@ function handleAudit(args: Record<string, unknown>): unknown {
 
 const TOOLS = [
   {
-    name: "brain_init",
+    name: "zero_init",
     description: "สร้างโครงสร้างโฟลเดอร์ Central Brain + ไฟล์ kernel เปล่า + skeleton packs + Home.md/Today.md",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
-    name: "brain_capture",
+    name: "zero_capture",
     description: "จดด่วนลง 00_Fleeting (เบาที่สุด ไม่ validate)",
     inputSchema: {
       type: "object",
@@ -766,7 +830,7 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_write_note",
+    name: "zero_write_note",
     description: "เขียนโน้ตถาวรลง 10_Notes — atomic/entity ต้องมี evidence ≥ 1",
     inputSchema: {
       type: "object",
@@ -798,8 +862,8 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_update_note",
-    description: "แก้เฉพาะฟิลด์ที่ส่งของโน้ต (ห้ามแก้ id/created)",
+    name: "zero_update_note",
+    description: "แก้เฉพาะฟิลด์ที่ส่งของโน้ต รวม body (ห้ามแก้ id/created)",
     inputSchema: {
       type: "object",
       properties: {
@@ -829,8 +893,8 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_read",
-    description: "อ่านโน้ต (frontmatter + body) — T1 ถูก audit ทุกครั้ง / T2 ต้องมีไฟล์อนุมัติจากป๊าที่ .kb/approvals/<id>.json ก่อน ไม่งั้นถูกบล็อก",
+    name: "zero_read",
+    description: "อ่านโน้ต (frontmatter + body) — T1 audit ทุกครั้ง / T2 ต้องมีไฟล์อนุมัติจากป๊าก่อน",
     inputSchema: {
       type: "object",
       properties: { id_or_alias: { type: "string" } },
@@ -839,8 +903,8 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_search",
-    description: "ค้นจาก title/aliases/tags/body — default ไม่คืน T1/T2 (include_private=true คืน T1 และถูก audit / T2 ไม่คืนจนกว่าป๊าจะอนุมัติที่ .kb/approvals/<id>.json)",
+    name: "zero_search",
+    description: "ค้น title/aliases/tags/body คืน snippet — default ไม่คืน T1/T2 (include_private คืน T1+audit / T2 ต้องอนุมัติ) — limit/offset แบ่งหน้า",
     inputSchema: {
       type: "object",
       properties: {
@@ -849,13 +913,15 @@ const TOOLS = [
         type: { type: "string" },
         tag: { type: "string" },
         include_private: { type: "boolean" },
+        limit: { type: "number", description: "default 10" },
+        offset: { type: "number", description: "default 0" },
       },
       additionalProperties: false,
     },
   },
   {
-    name: "brain_link",
-    description: "สร้างลิงก์สองทิศระหว่างโน้ต + append links.jsonl",
+    name: "zero_link",
+    description: "สร้างลิงก์สองทิศระหว่างโน้ต + append links.jsonl (dedup ลิงก์ซ้ำ)",
     inputSchema: {
       type: "object",
       properties: {
@@ -868,7 +934,7 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_resolve",
+    name: "zero_resolve",
     description: "คืน id ที่ match alias/title (exact ก่อน แล้ว fuzzy contains)",
     inputSchema: {
       type: "object",
@@ -878,27 +944,31 @@ const TOOLS = [
     },
   },
   {
-    name: "brain_list_packs",
-    description: "list domain packs ใน .kb/packs + provenance status (verified/modified/unreviewed เทียบ .kb/packs.lock.json ที่ป๊าล็อกด้วยมือ)",
+    name: "zero_list_packs",
+    description: "list domain packs + provenance (verified/modified/unreviewed เทียบ packs.lock.json)",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
-    name: "brain_health",
-    description: "คำนวณ orphans/dead_links เขียน health.json + คืนผล",
+    name: "zero_health",
+    description: "health check ครบ (links.jsonl + frontmatter + body wikilinks + packs) — เขียน health.json เต็ม คืน counts + top20",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
-    name: "brain_home",
-    description: "คืน Home.md + Today.md (รีเฟรช Today จาก active notes + fleeting 24h)",
+    name: "zero_home",
+    description: "รีเฟรช Today.md (active + fleeting 24h) — ไม่คืน Home.md ตาม default (include_home=true ถ้าต้องการ)",
+    inputSchema: {
+      type: "object",
+      properties: { include_home: { type: "boolean" } },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "zero_nightly",
+    description: "วงจรกลางคืน: fleeting queue (cap 50) + regenerate Today.md + health + snapshot ลง 99_System/snapshots",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
-    name: "brain_nightly",
-    description: "วงจรกลางคืน: คืน fleeting queue ที่ยังไม่จัด + regenerate Today.md + health ครบ + snapshot ลง 99_System/snapshots — agent เรียกตอนเช้า/ก่อนนอน แล้วใช้ queue classify ต่อด้วย brain_write_note",
-    inputSchema: { type: "object", properties: {}, additionalProperties: false },
-  },
-  {
-    name: "brain_audit",
+    name: "zero_audit",
     description: "คืน audit log ล่าสุด N รายการ",
     inputSchema: {
       type: "object",
@@ -911,7 +981,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "central-brain-mcp-server", version: "1.0.0" },
+  { name: "central-brain-mcp-server", version: "2.0.0" },
   { capabilities: { tools: {} } },
 );
 
@@ -921,20 +991,20 @@ server.setRequestHandler(CallToolRequestSchema, (request) => {
   const { name, arguments: args = {} } = request.params;
   try {
     switch (name) {
-      case "brain_init": return ok(handleInit());
-      case "brain_capture": return ok(handleCapture(args));
-      case "brain_write_note": return ok(handleWriteNote(args));
-      case "brain_update_note": return ok(handleUpdateNote(args));
-      case "brain_read": return ok(handleRead(args));
-      case "brain_search": return ok(handleSearch(args));
-      case "brain_link": return ok(handleLink(args));
-      case "brain_resolve": return ok(handleResolve(args));
-      case "brain_list_packs": return ok(handleListPacks());
-      case "brain_health": return ok(handleHealth());
-      case "brain_home": return ok(handleHome());
-      case "brain_nightly": return ok(handleNightly());
-      case "brain_audit": return ok(handleAudit(args));
-      default: return fail(`ไม่รู้จัก tool: ${name}`);
+      case "zero_init": return ok(handleInit());
+      case "zero_capture": return ok(handleCapture(args));
+      case "zero_write_note": return ok(handleWriteNote(args));
+      case "zero_update_note": return ok(handleUpdateNote(args));
+      case "zero_read": return ok(handleRead(args));
+      case "zero_search": return ok(handleSearch(args));
+      case "zero_link": return ok(handleLink(args));
+      case "zero_resolve": return ok(handleResolve(args));
+      case "zero_list_packs": return ok(handleListPacks());
+      case "zero_health": return ok(handleHealth());
+      case "zero_home": return ok(handleHome(args));
+      case "zero_nightly": return ok(handleNightly());
+      case "zero_audit": return ok(handleAudit(args));
+      default: return fail(`ไม่รู้จัก tool: ${name} (v2.0.0 เปลี่ยนชื่อเป็น zero_* แล้ว)`);
     }
   } catch (err) {
     return fail(err instanceof Error ? err.message : String(err));

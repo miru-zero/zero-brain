@@ -1,6 +1,6 @@
 {
   "name": "central-brain-mcp-server",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Central Brain MCP Server — สมองกลาง domain-agnostic ผ่าน MCP (stdio)",
   "license": "MIT",
   "type": "module",
