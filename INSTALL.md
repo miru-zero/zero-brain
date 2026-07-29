@@ -5,21 +5,22 @@
 ## ขั้นตอน (ง่ายสุด)
 
 ```
-1. git clone https://github.com/miru-zero/zero-brain.git
-2. cd zero-brain && npm install && npm run build
+1. git clone https://github.com/miru-zero/zero-brain.git ~/.zero/mcp/zero-brain
+2. cd ~/.zero/mcp/zero-brain && npm install && npm run build
 3. npm run init            ← สร้างโครงสมองที่ ~/.zero/brain อัตโนมัติ
-4. node test/smoke.mjs     ← ต้องผ่าน 64/64 (16 sections) ก่อนไปต่อ
+4. node test/smoke.mjs     ← ต้องผ่าน 68/68 (17 sections) ก่อนไปต่อ
 5. ตั้ง MCP config (ด้านล่าง) แล้วเรียก zero_health = สำเร็จ
 ```
 
-## โครงที่แนะนำ (ถ้าอยากแยกโค้ดกับเนื้อสมอง)
+## โครงโซนมาตรฐาน (แยก 3 ส่วนเด็ดขาด)
 
 ```
-C:\Users\<user>\zero-brain\           ← clone repo นี้ (โค้ดล้วน)
-M:\Central_Brain\                     ← เนื้อสมอง (ถ้าใช้ที่อื่นนอกจาก ~/.zero/brain — ชี้ ZERO_BRAIN_ROOT มาที่นี่)
+~/.zero/mcp/zero-brain/    ← โค้ด (ช่องทางสื่อสาร — clone repo นี้)
+~/.zero/brain/             ← เนื้อสมอง (ความจำล้วน — default ของ ZERO_BRAIN_ROOT)
+~/.zero/share/             ← ส่วนทำงาน (daimon/Kimi Work storage)
 ```
 
-- ห้ามเอาเนื้อสมองไว้ในโฟลเดอร์ clone (กันเผลอ commit — .gitignore ดักไว้แล้ว แต่แยกกายภาพปลอดภัยกว่า)
+- ห้ามเอาเนื้อสมองไว้ในโฟลเดอร์ clone และห้ามเอา runtime/ไฟล์งานไว้ใน brain (กันรกและกัน key รั่ว)
 - สมอง 1 ใบ ไคลเอนต์หลายตัว: ทุก client ชี้ ZERO_BRAIN_ROOT เดียวกัน (หรือปล่อย default ให้ชี้ ~/.zero/brain เหมือนกัน)
 - ย้ายสมองเก่าจาก pack zip: แตก `Central_Brain_seed` ไปที่ brain root แล้วชี้ ZERO_BRAIN_ROOT มาที่นั่น
 
@@ -32,7 +33,7 @@ M:\Central_Brain\                     ← เนื้อสมอง (ถ้า
   "mcpServers": {
     "zero-brain": {
       "command": "node",
-      "args": ["C:\\Users\\<user>\\zero-brain\\dist\\index.js"],
+      "args": ["C:\\Users\\<user>\\.zero\\mcp\\zero-brain\\dist\\index.js"],
       "env": { "ZERO_BRAIN_ACTOR": "kimi-code" }
     }
   }
@@ -46,7 +47,7 @@ M:\Central_Brain\                     ← เนื้อสมอง (ถ้า
   "mcpServers": {
     "zero-brain": {
       "command": "node",
-      "args": ["C:\\Users\\<user>\\zero-brain\\dist\\index.js"],
+      "args": ["C:\\Users\\<user>\\.zero\\mcp\\zero-brain\\dist\\index.js"],
       "env": {
         "ZERO_BRAIN_ROOT": "M:\\Central_Brain",
         "ZERO_BRAIN_ACTOR": "kimi-code"

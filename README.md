@@ -85,10 +85,13 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
 
 ```
 ~/.zero/
-├── brain/        # เนื้อสมองของ zero-brain (repo นี้) — default ตั้งแต่ v2.1.0
-├── share/        # storage ของ daimon/Kimi Work (sessions, skills, runtime)
+├── brain/        # ความจำล้วน — เนื้อสมอง zero-brain + Obsidian vault (default ตั้งแต่ v2.1.0)
+├── mcp/          # ช่องทางสื่อสาร — MCP servers (repo นี้ติดตั้งที่ ~/.zero/mcp/zero-brain)
+├── share/        # ส่วนทำงาน — storage ของ daimon/Kimi Work (sessions, skills, runtime)
 └── <อนาคต>/      # โปรเจกต์ zero-* ตัวอื่นจะมาอยู่ใต้โซนเดียวกันนี้
 ```
+
+**แยก 3 ส่วนเด็ดขาด:** ความจำ (`brain/`) · ช่องทางสื่อสาร (`mcp/`) · ส่วนทำงาน (`share/`) — ห้ามปนกัน
 
 - **`~/.zero/brain` = ส่วนความจำเท่านั้น** — ห้ามโปรแกรมอื่นมาสร้างไฟล์งาน/runtime ในนี้ (ไม่ใช่ส่วนทำงาน) ถ้าจำเป็นต้องเก็บ runtime ให้สร้างโฟลเดอร์พี่น้อง (เช่น `~/.zero/share`)
 - โค้ด (repo) อยู่ที่ไหนก็ได้ แต่ **ข้อมูลรันไทม์ทั้งหมดอยู่ใต้ `~/.zero/`** ที่เดียว ไม่รก

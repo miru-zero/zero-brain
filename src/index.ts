@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Zero Brain MCP Server (v2.1.0)
+ * Zero Brain MCP Server (v2.2.0)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
@@ -982,7 +982,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.1.0" },
+  { name: "zero-brain-mcp-server", version: "2.2.0" },
   { capabilities: { tools: {} } },
 );
 
