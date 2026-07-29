@@ -86,9 +86,11 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
 ```
 ~/.zero/
 ├── brain/        # เนื้อสมองของ zero-brain (repo นี้) — default ตั้งแต่ v2.1.0
+├── share/        # storage ของ daimon/Kimi Work (sessions, skills, runtime)
 └── <อนาคต>/      # โปรเจกต์ zero-* ตัวอื่นจะมาอยู่ใต้โซนเดียวกันนี้
 ```
 
+- **`~/.zero/brain` = ส่วนความจำเท่านั้น** — ห้ามโปรแกรมอื่นมาสร้างไฟล์งาน/runtime ในนี้ (ไม่ใช่ส่วนทำงาน) ถ้าจำเป็นต้องเก็บ runtime ให้สร้างโฟลเดอร์พี่น้อง (เช่น `~/.zero/share`)
 - โค้ด (repo) อยู่ที่ไหนก็ได้ แต่ **ข้อมูลรันไทม์ทั้งหมดอยู่ใต้ `~/.zero/`** ที่เดียว ไม่รก
 - ย้ายได้เสมอด้วย `ZERO_BRAIN_ROOT` แต่ default คือโซนนี้
 - env ที่ระบบอ่านมีแค่ `ZERO_BRAIN_ROOT` / `ZERO_BRAIN_ACTOR` (และ fallback `CENTRAL_BRAIN_*`)
