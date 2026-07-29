@@ -85,16 +85,18 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
 
 ```
 ~/.zero/
-├── brain/        # ความจำล้วน — เนื้อสมอง zero-brain + Obsidian vault (default ตั้งแต่ v2.1.0)
+├── brain/        # ความจำ + ความสามารถ — เนื้อสมอง zero-brain + Obsidian vault (default ตั้งแต่ v2.1.0)
+│   └── SKILL/    # skills ที่เราเขียนเอง (zero-brain-memory, อนาคต zero-* skills) — ความสามารถอยู่ในสมอง
 ├── mcp/          # ช่องทางสื่อสาร — MCP servers (repo นี้ติดตั้งที่ ~/.zero/mcp/zero-brain)
 ├── share/        # ส่วนทำงาน — storage ของ daimon/Kimi Work (sessions, runtime)
-├── SKILL/        # เครื่องมือ — skills ที่เราเขียนเอง (zero-brain-memory, อนาคต zero-* skills)
 └── <อนาคต>/      # โปรเจกต์ zero-* ตัวอื่นจะมาอยู่ใต้โซนเดียวกันนี้
 ```
 
-**แยกส่วนเด็ดขาด:** ความจำ (`brain/`) · ช่องทางสื่อสาร (`mcp/`) · ส่วนทำงาน (`share/`) · เครื่องมือ (`SKILL/`) — ห้ามปนกัน
+**แยกส่วนเด็ดขาด:** ความจำ+ความสามารถ (`brain/`) · ช่องทางสื่อสาร (`mcp/`) · ส่วนทำงาน (`share/`) — ห้ามปนกัน · สกิล = ความสามารถของสมอง จึงอยู่ **ใน** `brain/SKILL/` ไม่แยกโซน
 
-**ชี้ไฟล์หากัน (single source of truth):** ของที่หลายส่วนต้องใช้ร่วมกัน ให้เก็บต้นฉบับไว้ที่โซนของมัน แล้วส่วนอื่นชี้มาด้วย junction — เช่น `SKILL/zero-brain-memory` เป็นต้นฉบับ `share/daimon-share/daimon/skills/zero-brain-memory` เป็น junction ชี้กลับมา แก้ที่เดียวเห็นผลทุกที่
+**ชี้ไฟล์หากัน (single source of truth):** ของที่หลายส่วนต้องใช้ร่วมกัน ให้เก็บต้นฉบับไว้ที่โซนของมัน แล้วส่วนอื่นชี้มาด้วย junction — เช่น `brain/SKILL/zero-brain-memory` เป็นต้นฉบับ `share/daimon-share/daimon/skills/zero-brain-memory` เป็น junction ชี้เข้าสมอง แก้ที่เดียวเห็นผลทุกที่
+
+**ศูนย์กลาง (Zero hub):** ในสมองทุกเส้นประสาทบรรจบที่ `20_Atlas/Zero.md` — 3 ก้อนใหญ่: ความจำ (`Zero_Brain Legacy Index`) · ความสามารถ (`Skill Index`) · ระบบ/แผนที่ (`Home`, `Hotcache`, `Memory Placement Rules`, `Brain Operating Model`, `AGENTS`) — โน้ตที่ไม่เชื่อมเข้าก้อนใดเลยถือว่ายังไม่ sync เข้าระบบ
 
 - **`~/.zero/brain` = ส่วนความจำเท่านั้น** — ห้ามโปรแกรมอื่นมาสร้างไฟล์งาน/runtime ในนี้ (ไม่ใช่ส่วนทำงาน) ถ้าจำเป็นต้องเก็บ runtime ให้สร้างโฟลเดอร์พี่น้อง (เช่น `~/.zero/share`)
 - โค้ด (repo) อยู่ที่ไหนก็ได้ แต่ **ข้อมูลรันไทม์ทั้งหมดอยู่ใต้ `~/.zero/`** ที่เดียว ไม่รก
