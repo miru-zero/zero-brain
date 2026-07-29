@@ -1,6 +1,6 @@
 {
   "name": "zero-brain-mcp-server",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Zero Brain MCP Server — สมองกลาง domain-agnostic ผ่าน MCP (stdio)",
   "license": "MIT",
   "type": "module",

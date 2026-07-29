@@ -8,9 +8,10 @@
  */
 
 import { createHash } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface ManifestRecord {
   id: string;
@@ -267,7 +268,38 @@ export function initBrain(root: string): { created: string[]; root: string } {
     writeFileSync(todayFile, `# Today\n\n(ยังไม่มีโน้ต active)\n`, "utf8");
     created.push("20_Atlas/Today.md");
   }
+  // bootstrap: copy ไฟล์กฎ+templates จาก seed/ (เฉพาะไฟล์ที่ยังไม่มี — ห้ามทับของที่ผู้ใช้แก้แล้ว)
+  copySeedFiles(root, created);
   return { created, root };
+}
+
+/** หาโฟลเดอร์ seed/ ของ repo (dist/kernel.js → <repo>/seed) — คืน null ถ้าไม่มี (เช่นแพ็กแบบไม่รวม seed) */
+function seedDir(): string | null {
+  const dir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "seed");
+  return existsSync(dir) ? dir : null;
+}
+
+function copySeedFiles(root: string, created: string[]): void {
+  const base = seedDir();
+  if (!base) return;
+  const date = isoNow().slice(0, 10);
+  const walk = (rel: string): void => {
+    const src = path.join(base, rel);
+    for (const entry of readdirSync(src, { withFileTypes: true })) {
+      const childRel = rel ? path.join(rel, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        walk(childRel);
+        continue;
+      }
+      const dest = path.join(root, childRel);
+      if (existsSync(dest)) continue; // มีอยู่แล้ว ข้าม (idempotent)
+      mkdirSync(path.dirname(dest), { recursive: true });
+      const content = readFileSync(path.join(base, childRel), "utf8").replaceAll("{{date}}", date);
+      writeFileSync(dest, content, "utf8");
+      created.push(childRel.split(path.sep).join("/"));
+    }
+  };
+  walk("");
 }
 
 export function isInitialized(root: string): boolean {

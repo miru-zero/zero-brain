@@ -363,6 +363,44 @@ try {
   } finally {
     rmSync(root2, { recursive: true, force: true });
   }
+
+  // ---- 17. v2.2.0 bootstrap seed — init สร้างไฟล์กฎ+templates ครบ ----
+  console.log("17) v2.2.0 bootstrap seed");
+  const root3 = mkdtempSync(path.join(tmpdir(), "zero-brain-seed-"));
+  try {
+    execFileSync(process.execPath, [serverEntry, "--init"], {
+      env: { ...process.env, ZERO_BRAIN_ROOT: root3 },
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    const seedFiles = [
+      "AGENTS.md",
+      "20_Atlas/Brain Operating Model.md",
+      "20_Atlas/Memory Placement Rules.md",
+      "20_Atlas/Hotcache.md",
+      "40_Templates/base/atomic.md",
+      "40_Templates/base/entity.md",
+      "40_Templates/base/source.md",
+      "40_Templates/base/log.md",
+      "40_Templates/base/moc.md",
+    ];
+    check("init สร้างไฟล์ seed ครบ 9 ไฟล์", seedFiles.every((f) => existsSync(path.join(root3, f))),
+      seedFiles.filter((f) => !existsSync(path.join(root3, f))).join(","));
+    const hot = readFileSync(path.join(root3, "20_Atlas/Hotcache.md"), "utf8");
+    check("Hotcache แทน {{date}} แล้ว", !hot.includes("{{date}}") && /\[\d{4}-\d{2}-\d{2}\]/.test(hot));
+    const atomic = readFileSync(path.join(root3, "40_Templates/base/atomic.md"), "utf8");
+    check("template atomic มี frontmatter+evidence", atomic.includes("type: atomic") && atomic.includes("evidence:"));
+    // idempotent: แก้ Hotcache แล้ว init ซ้ำ ต้องไม่ทับ
+    writeFileSync(path.join(root3, "20_Atlas/Hotcache.md"), hot + "\nMARK-BY-USER\n", "utf8");
+    execFileSync(process.execPath, [serverEntry, "--init"], {
+      env: { ...process.env, ZERO_BRAIN_ROOT: root3 },
+      encoding: "utf8",
+      timeout: 15000,
+    });
+    check("init ซ้ำไม่ทับไฟล์ที่ผู้ใช้แก้", readFileSync(path.join(root3, "20_Atlas/Hotcache.md"), "utf8").includes("MARK-BY-USER"));
+  } finally {
+    rmSync(root3, { recursive: true, force: true });
+  }
 } catch (err) {
   failed++;
   console.error("FATAL:", err);
@@ -376,5 +414,5 @@ if (failed > 0) {
   console.error(`SMOKE TEST FAILED (${failed} ข้อ)`);
   process.exit(1);
 }
-console.log("SMOKE TEST PASSED (ครบ 16 ข้อ)");
+console.log("SMOKE TEST PASSED (ครบ 17 ข้อ)");
 process.exit(0);

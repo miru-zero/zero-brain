@@ -2,6 +2,12 @@
 
 MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Zero Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
 
+> **v2.2.0 (2026-07-29)** — bootstrap จริง ไม่ใช่โฟลเดอร์เปล่า:
+> 1. **`npm run init` วางไฟล์กฎ+templates ให้ครบ** จากโฟลเดอร์ `seed/` ใน repo: `AGENTS.md` (กฎสำหรับ agent), `20_Atlas/Brain Operating Model.md`, `20_Atlas/Memory Placement Rules.md`, `20_Atlas/Hotcache.md` (แทน `{{date}}` อัตโนมัติ), note templates 5 แบบใน `40_Templates/base/` (atomic/entity/source/log/moc)
+> 2. **idempotent แบบปลอดภัย** — copy เฉพาะไฟล์ที่ยังไม่มี ไฟล์ที่ผู้ใช้แก้แล้วจะไม่ถูกเขียนทับ
+> 3. สมองเก่าที่ init ไปแล้ว (v2.1.0) รัน `npm run init` ซ้ำได้เลย จะเติมเฉพาะไฟล์ที่ขาด
+> smoke test 68/68 (17 sections)
+>
 > **v2.1.0 (2026-07-29)** — install ง่ายขึ้นมาก:
 > 1. **`npm run init` สร้างโครงสมองให้อัตโนมัติ** — ไม่ต้องแตก seed zip เองอีก (`node dist/index.js --init` ใช้ handler เดียวกับ `zero_init`)
 > 2. **บ้านหลัก default คือ `~/.zero/brain`** — ไม่ตั้ง env ก็ใช้ได้เลย (ตั้ง `ZERO_BRAIN_ROOT` เฉพาะตอนอยากย้ายที่)
@@ -37,7 +43,7 @@ MCP server (stdio transport) สำหรับเชื่อม agent ใด�
 >
 > **หมายเหตุ pack:** `node_modules/` ถูก bundle มาใน zip เจตนาเพื่อ **offline install** (ข้าม `npm install` ได้เลย แค่ `npm run build` หรือใช้ `dist/` ที่ build มาแล้ว)
 >
-> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 64/64 = พร้อม) → ค่อยตั้งค่า MCP client จริง
+> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 68/68 = พร้อม) → ค่อยตั้งค่า MCP client จริง
 
 ## ความต้องการ
 
@@ -94,7 +100,7 @@ npm run build
 node test/smoke.mjs
 ```
 
-smoke test ครอบคลุม 16 sections (64 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving / v2.1.0 install UX — ต้องผ่านทั้งหมด (exit 0)
+smoke test ครอบคลุม 17 sections (68 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving / v2.1.0 install UX / v2.2.0 bootstrap seed — ต้องผ่านทั้งหมด (exit 0)
 
 ## Tools ทั้ง 13 ตัว
 
@@ -148,9 +154,10 @@ smoke test ครอบคลุม 16 sections (64 checks): init / capture / ev
 src/
 ├── index.ts    # MCP server (stdio) + tools 13 ตัว (zero_*)
 ├── kernel.ts   # append-only JSONL, manifest/links/aliases/health/audit
-└── schema.ts   # frontmatter parse/serialize (YAML แบบจำกัด), slug sanitize, validation
+├── schema.ts   # frontmatter parse/serialize (YAML แบบจำกัด), slug sanitize, validation
+seed/           # bootstrap ไฟล์กฎ+templates ที่ init วางให้ (AGENTS.md, Atlas docs, note templates)
 test/
-└── smoke.mjs   # smoke test 16 sections (64 checks) รันบน dist
+└── smoke.mjs   # smoke test 17 sections (68 checks) รันบน dist
 ```
 
 ## Skills
