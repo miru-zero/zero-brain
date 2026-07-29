@@ -4,6 +4,16 @@
 
 ## ขั้นตอน (ง่ายสุด)
 
+### ทางลัด — คำสั่งเดียว (แนะนำ, ใช้ 0 token)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+ทำครบ: clone/update → npm install → build → init สมอง → smoke → พิมพ์ MCP config ให้วาง — **ไม่ต้องมี AI ในลูป** (งาน install/ops ต้อง zero-token ตาม Token Budget Policy)
+
+### ทำมือทีละขั้น
+
 ```
 1. git clone https://github.com/miru-zero/zero-brain.git ~/.zero/mcp/zero-brain
 2. cd ~/.zero/mcp/zero-brain && npm install && npm run build
