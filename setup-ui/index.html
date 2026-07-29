@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>CENTRAL_BRAIN // SETUP</title>
+<title>ZERO_BRAIN // SETUP</title>
 <style>
   :root{
     --bg:#0d0f0c; --panel:#151812; --panel2:#1b1f16; --line:#2c3324;
@@ -45,18 +45,18 @@
 <body>
 <div class="wrap">
   <header>
-    <div class="t">CENTRAL_BRAIN // SETUP<span class="blink">_</span></div>
+    <div class="t">ZERO_BRAIN // SETUP<span class="blink">_</span></div>
     <div class="sub">สมองกลาง domain-agnostic · local-first · offline · ไม่มี network call · v1.2</div>
   </header>
 
   <h2>ขั้นตอนติดตั้ง</h2>
 
   <div class="step"><b>1.</b> clone โค้ด (repo public — โค้ดล้วน ไม่มีเนื้อสมอง)
-    <div class="cmd"><span class="p">$ </span>git clone https://github.com/miru-zero/central-brain.git<button class="copy" data-c="git clone https://github.com/miru-zero/central-brain.git">copy</button></div>
+    <div class="cmd"><span class="p">$ </span>git clone https://github.com/miru-zero/zero-brain.git<button class="copy" data-c="git clone https://github.com/miru-zero/zero-brain.git">copy</button></div>
   </div>
 
   <div class="step"><b>2.</b> ติดตั้ง + build (ต้องมี Node.js ≥ 18 และเน็ตครั้งเดียวตอน npm install)
-    <div class="cmd"><span class="p">$ </span>cd central-brain && npm install && npm run build<button class="copy" data-c="cd central-brain && npm install && npm run build">copy</button></div>
+    <div class="cmd"><span class="p">$ </span>cd zero-brain && npm install && npm run build<button class="copy" data-c="cd zero-brain && npm install && npm run build">copy</button></div>
   </div>
 
   <div class="step warn"><b>3. ต้องผ่านก่อนไปต่อ</b> — smoke test 45 ข้อ (T2 gate / provenance / nightly / scanner)
@@ -90,7 +90,7 @@
       </div>
     </div>
     <label>ที่อยู่โค้ด (โฟลเดอร์ที่ clone)</label>
-    <input id="code" value="C:\Users\you\central-brain">
+    <input id="code" value="C:\Users\you\zero-brain">
     <label>brain root (ที่อยู่เนื้อสมอง)</label>
     <input id="root" value="M:\Central_Brain">
     <div id="out" title="คลิกเพื่อ copy"></div>
@@ -101,14 +101,14 @@
   <div class="rule">ไม่มี delete ใดๆ — ซ่อนได้ด้วย <span class="tag">state: archive</span> เท่านั้น · manifest/links/audit เป็น append-only</div>
   <div class="rule">โน้ต atomic/entity ต้องมี <b>evidence ≥ 1</b> ไม่งั้น server ปฏิเสธ</div>
   <div class="rule"><b>T1</b> อ่านได้แต่ถูก audit ทุกครั้ง · <b>T2</b> ถูกบล็อกจนกว่าเจ้าของสร้าง <span class="tag">.kb/approvals/&lt;id&gt;.json</span> ด้วยมือ — agent อนุมัติตัวเองไม่ได้</div>
-  <div class="rule">ไม่มีทริกเกอร์ = ไม่อ่าน · server อ่าน env แค่ <span class="tag">CENTRAL_BRAIN_ROOT</span><span class="tag">CENTRAL_BRAIN_ACTOR</span> เท่านั้น</div>
+  <div class="rule">ไม่มีทริกเกอร์ = ไม่อ่าน · server อ่าน env แค่ <span class="tag">ZERO_BRAIN_ROOT</span><span class="tag">ZERO_BRAIN_ACTOR</span> เท่านั้น</div>
 
   <h2>พร้อมใช้งานแล้ว?</h2>
   <div class="step">เช้า: <b>brain_home</b> · จดด่วน: <b>brain_capture</b> · เขียนความรู้: <b>brain_write_note</b> · ก่อนนอน: <b>brain_nightly</b>
     <div class="note">ก่อนลงมืองานใหญ่ ให้ค้นสมองก่อนว่าเคยทำ/รู้เรื่องนี้แล้วหรือยัง (brain_search / brain_resolve) — 13 tools ครบใน README ของ repo</div>
   </div>
 
-  <footer>central-brain v1.2 · miru-zero · เอกสารเต็ม: README.md / INSTALL.md / ROADMAP-v1.3.md ใน repo</footer>
+  <footer>zero-brain v2.0.1 · miru-zero · เอกสารเต็ม: README.md / INSTALL.md / ROADMAP-v1.3.md ใน repo</footer>
 </div>
 
 <script>
@@ -117,10 +117,10 @@ function esc(s){ return s.replace(/\\/g,"\\\\"); }
 function gen(){
   const client=$("client").value, actor=$("actor").value.trim()||"unknown-agent";
   const code=esc($("code").value.trim()), root=esc($("root").value.trim());
-  const obj={mcpServers:{"central-brain":{
+  const obj={mcpServers:{"zero-brain":{
     command:"node",
     args:[code+"\\\\dist\\\\index.js"],
-    env:{CENTRAL_BRAIN_ROOT:root,CENTRAL_BRAIN_ACTOR:actor}
+    env:{ZERO_BRAIN_ROOT:root,ZERO_BRAIN_ACTOR:actor}
   }}};
   $("out").textContent="// client: "+client+"\n"+JSON.stringify(obj,null,2);
 }

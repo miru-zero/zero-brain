@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Central Brain MCP Server (v2.0.0)
+ * Zero Brain MCP Server (v2.0.1)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
@@ -53,7 +53,8 @@ import {
 } from "./kernel.js";
 
 const ROOT = brainRoot();
-const ACTOR = process.env.CENTRAL_BRAIN_ACTOR ?? "central-brain-mcp";
+// ZERO_BRAIN_ACTOR เป็นชื่อหลักตั้งแต่ v2.0.1 — CENTRAL_BRAIN_ACTOR ยังใช้ได้ (fallback)
+const ACTOR = process.env.ZERO_BRAIN_ACTOR ?? process.env.CENTRAL_BRAIN_ACTOR ?? "zero-brain-mcp";
 
 // เพดานป้องกัน response บวม (โทเค็น) — ค่าเต็มอยู่ในไฟล์ .kb/ เสมอ
 const SEARCH_DEFAULT_LIMIT = 10;
@@ -813,7 +814,7 @@ function handleAudit(args: Record<string, unknown>): unknown {
 const TOOLS = [
   {
     name: "zero_init",
-    description: "สร้างโครงสร้างโฟลเดอร์ Central Brain + ไฟล์ kernel เปล่า + skeleton packs + Home.md/Today.md",
+    description: "สร้างโครงสร้างโฟลเดอร์ Zero Brain + ไฟล์ kernel เปล่า + skeleton packs + Home.md/Today.md",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
   {
@@ -981,7 +982,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "central-brain-mcp-server", version: "2.0.0" },
+  { name: "zero-brain-mcp-server", version: "2.0.1" },
   { capabilities: { tools: {} } },
 );
 
@@ -1014,7 +1015,7 @@ server.setRequestHandler(CallToolRequestSchema, (request) => {
 async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error(`central-brain-mcp-server ready (root=${ROOT})`);
+  console.error(`zero-brain-mcp-server ready (root=${ROOT})`);
 }
 
 main().catch((err) => {

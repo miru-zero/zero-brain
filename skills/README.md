@@ -29,4 +29,4 @@ AI จะสร้างโฟลเดอร์ skill ในตำแหน่�
 ## ข้อกำหนด
 
 - `zero-brain-memory` อ้างอิง env `%ZERO_BRAIN_PATH%` — ตั้งให้ชี้ไปที่ vault จริงก่อนใช้ (เช่น `M:\Zero_Brain`)
-- skill ไม่ได้แจก vault มาด้วย — vault เป็นของแต่ละเครื่อง (ดู repo [central-brain](https://github.com/miru-zero/central-brain) สำหรับ MCP server ที่ใช้งานร่วมกัน)
+- skill ไม่ได้แจก vault มาด้วย — vault เป็นของแต่ละเครื่อง (ดู repo [zero-brain](https://github.com/miru-zero/zero-brain) สำหรับ MCP server ที่ใช้งานร่วมกัน — คนละตัวกับ skill `zero-brain-memory` ในโฟลเดอร์นี้)

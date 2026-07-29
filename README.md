@@ -1,7 +1,12 @@
-# Central Brain MCP Server
+# Zero Brain MCP Server
 
-MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Central Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
+MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Zero Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
 
+> **v2.0.1 (2026-07-29)** — เปลี่ยนชื่อโปรเจกต์ **central-brain → zero-brain** (คนละตัวกับ skill `zero-brain-memory`):
+> 1. repo ย้ายเป็น `miru-zero/zero-brain` (URL เก่า redirect อัตโนมัติ)
+> 2. package/bin: `zero-brain-mcp-server` / `zero-brain`
+> 3. env หลักเปลี่ยนเป็น `ZERO_BRAIN_ROOT` / `ZERO_BRAIN_ACTOR` — **ค่าเก่า `CENTRAL_BRAIN_*` ยังใช้ได้** (fallback ไม่ break config เดิม)
+>
 > **v2.0.0 (2026-07-29)** — breaking change + token-saving:
 > 1. **Rename tools ทั้ง 13 ตัว `brain_*` → `zero_*`** — ชื่อใหม่: `zero_init` `zero_capture` `zero_write_note` `zero_update_note` `zero_read` `zero_search` `zero_link` `zero_resolve` `zero_list_packs` `zero_health` `zero_home` `zero_nightly` `zero_audit` (MCP client config ไม่ต้องแก้ แต่ผู้ใช้/agent ต้องเรียกชื่อใหม่; audit log action strings ยังคง `brain_*` เดิมเพื่อ continuity ของ log เก่า)
 > 2. **Response กระชับลง (ลด token)** — ทุก tool คืน compact JSON (ไม่ pretty-print); `zero_search` มี `limit` (default 10) + `offset` คืน `total/count/limit/offset`; `zero_health` เขียน `health.json` เต็มเหมือนเดิมแต่ response คืนเฉพาะสรุป + counts + top-20 ของแต่ละหมวด; `zero_home` default **ไม่**คืนเนื้อ Home.md (คืน path + ขนาด ใส่ `include_home: true` ถ้าต้องการ) และ Today.md จำกัด active 30 ใบ; `zero_nightly` จำกัด fleeting queue 50 ใบ
@@ -44,18 +49,18 @@ build จะ compile TypeScript ไปที่ `dist/` — entry point คื�
 
 ## การตั้งค่า MCP client
 
-กำหนดตำแหน่ง brain root ผ่าน env `CENTRAL_BRAIN_ROOT` (ถ้าไม่ตั้ง จะใช้ `./brain` สัมพัทธ์กับ working directory)
+กำหนดตำแหน่ง brain root ผ่าน env `ZERO_BRAIN_ROOT` (ถ้าไม่ตั้ง จะใช้ `./brain` สัมพัทธ์กับ working directory) — ตั้งแต่ v2.0.1 รองรับ `CENTRAL_BRAIN_ROOT` เป็น fallback เพื่อไม่ break config เก่า
 
 ตัวอย่าง config สำหรับ MCP client (เช่น Claude Desktop / client ที่รองรับ stdio):
 
 ```json
 {
   "mcpServers": {
-    "central-brain": {
+    "zero-brain": {
       "command": "node",
-      "args": ["/absolute/path/to/central-brain-mcp-server/dist/index.js"],
+      "args": ["/absolute/path/to/zero-brain/dist/index.js"],
       "env": {
-        "CENTRAL_BRAIN_ROOT": "/absolute/path/to/my-brain"
+        "ZERO_BRAIN_ROOT": "/absolute/path/to/my-brain"
       }
     }
   }

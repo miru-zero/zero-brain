@@ -1,5 +1,5 @@
 /**
- * kernel.ts — low-level ops ของ Central Brain
+ * kernel.ts — low-level ops ของ Zero Brain
  * - append-only JSONL ทุกไฟล์ (manifest/links/audit) — เขียนทับห้ามเด็ดขาด
  * - upsertManifest(note): ถ้ามี id เดิม → append record ใหม่ (ตัวล่าสุดชนะตอนอ่าน)
  * - readManifest(): load ทั้งหมดแล้ว reduce เป็นตัวล่าสุดต่อ id
@@ -61,7 +61,8 @@ export const KB_DIRS = [
 ] as const;
 
 export function brainRoot(): string {
-  const root = process.env.CENTRAL_BRAIN_ROOT ?? "./brain";
+  // ZERO_BRAIN_ROOT เป็นชื่อหลักตั้งแต่ v2.0.1 — CENTRAL_BRAIN_ROOT ยังใช้ได้ (fallback)
+  const root = process.env.ZERO_BRAIN_ROOT ?? process.env.CENTRAL_BRAIN_ROOT ?? "./brain";
   return path.resolve(root);
 }
 
@@ -195,7 +196,7 @@ const PACK_SKELETONS: Record<string, string> = {
   ].join("\n"),
 };
 
-const HOME_MD = `# Home — Central Brain
+const HOME_MD = `# Home — Zero Brain
 
 สมองกลาง domain-agnostic (v2.1)
 

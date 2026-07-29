@@ -10,7 +10,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const serverEntry = path.join(here, "..", "dist", "index.js");
-const root = mkdtempSync(path.join(tmpdir(), "central-brain-smoke-"));
+const root = mkdtempSync(path.join(tmpdir(), "zero-brain-smoke-"));
 
 let passed = 0;
 let failed = 0;
@@ -76,7 +76,7 @@ class McpClient {
   close() { this.proc.kill("SIGTERM"); }
 }
 
-const client = new McpClient(serverEntry, { CENTRAL_BRAIN_ROOT: root });
+const client = new McpClient(serverEntry, { ZERO_BRAIN_ROOT: root });
 
 try {
   await client.request("initialize", {
@@ -326,7 +326,7 @@ try {
     typeof homeSlim.data.home_path === "string" && typeof homeSlim.data.home_chars === "number",
     JSON.stringify(homeSlim.data).slice(0, 150));
   const homeFull = await client.call("zero_home", { include_home: true });
-  check("include_home=true คืน Home.md", typeof homeFull.data.home === "string" && homeFull.data.home.includes("Central Brain"));
+  check("include_home=true คืน Home.md", typeof homeFull.data.home === "string" && homeFull.data.home.includes("Zero Brain"));
   const healthSlim = await client.call("zero_health", {});
   check("health คืน counts ครบทุกหมวด", typeof healthSlim.data.counts?.orphans === "number" &&
     typeof healthSlim.data.counts?.dead_links === "number" &&
