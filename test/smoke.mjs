@@ -3,7 +3,7 @@
  * รัน: node test/smoke.mjs (ต้อง npm run build ก่อน) — exit 0 เมื่อผ่านทั้งหมด
  */
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,7 +76,7 @@ class McpClient {
   close() { this.proc.kill("SIGTERM"); }
 }
 
-const client = new McpClient(serverEntry, { ZERO_BRAIN_ROOT: root });
+const client = new McpClient(serverEntry, { ZERO_BRAIN_ROOT: root, ZERO_LOCK_TIMEOUT_MS: "2000" });
 
 try {
   await client.request("initialize", {
@@ -401,6 +401,166 @@ try {
   } finally {
     rmSync(root3, { recursive: true, force: true });
   }
+
+  // ---- 18. v2.3.0 corrupt-line health + zero_compact ----
+  console.log("18) corrupt-line health + zero_compact");
+  const manifestFile = path.join(root, ".kb/manifest.jsonl");
+  appendFileSync(manifestFile, "GARBAGE-LINE-NOT-JSON{\n", "utf8");
+  const hCorrupt = await client.call("zero_health", {});
+  check("health เห็น corrupt_lines.manifest ≥ 1", (hCorrupt.data.corrupt_lines?.manifest ?? 0) >= 1,
+    JSON.stringify(hCorrupt.data.corrupt_lines));
+  check("health counts.corrupt_lines ≥ 1", (hCorrupt.data.counts?.corrupt_lines ?? 0) >= 1);
+  check("health.json เก็บ corrupt_lines", typeof JSON.parse(readFileSync(path.join(root, ".kb/health.json"), "utf8")).corrupt_lines?.manifest === "number");
+  // links.jsonl: ปลอมบรรทัดซ้ำ แล้ว compact ต้องกวาดออก
+  const linksFile = path.join(root, ".kb/links.jsonl");
+  const firstLink = readFileSync(linksFile, "utf8").trim().split("\n").filter(Boolean)[0];
+  appendFileSync(linksFile, firstLink + "\n" + firstLink + "\n", "utf8");
+  const comp = await client.call("zero_compact", {});
+  check("compact คืน ok", comp.data.ok === true, JSON.stringify(comp.data));
+  check("compact ลด links (dedup ซ้ำ)", (comp.data.links_after ?? 0) < (comp.data.links_before ?? 0),
+    `before=${comp.data.links_before} after=${comp.data.links_after}`);
+  const manifestAfter = readFileSync(manifestFile, "utf8").trim().split("\n").filter(Boolean);
+  check("manifest หลัง compact parse ได้ทุกบรรทัด (corrupt หลุด)", manifestAfter.every((l) => { try { JSON.parse(l); return true; } catch { return false; } }));
+  const uniqueIds = new Set(manifestAfter.map((l) => JSON.parse(l).id));
+  check("manifest เหลือ 1 record ต่อ id", uniqueIds.size === manifestAfter.length, `lines=${manifestAfter.length} unique=${uniqueIds.size}`);
+  const hClean = await client.call("zero_health", {});
+  check("health หลัง compact corrupt = 0", (hClean.data.counts?.corrupt_lines ?? -1) === 0,
+    JSON.stringify(hClean.data.corrupt_lines));
+  check("compact ถูก audit", readFileSync(path.join(root, ".kb/audit.jsonl"), "utf8").includes("brain_compact"));
+  check("health รายงาน t1_reads_24h (เคยอ่าน T1 ในข้อ 10)", (hClean.data.t1_reads_24h ?? 0) >= 1,
+    `t1_reads_24h=${hClean.data.t1_reads_24h}`);
+  check("health รายงาน repo_dirty เป็น boolean (repo นี้เป็น git)", typeof hClean.data.repo_dirty === "boolean",
+    `repo_dirty=${hClean.data.repo_dirty}`);
+
+  // ---- 19. v2.3.0 write lock ----
+  console.log("19) write lock");
+  const lockFile = path.join(root, ".kb/write.lock");
+  writeFileSync(lockFile, "held-by-smoke\n", "utf8");
+  const lockedCap = await client.call("zero_capture", { text: "capture ขณะ lock ถูกถือ" });
+  check("capture ติด lock ต้อง error", lockedCap.isError === true, JSON.stringify(lockedCap.data));
+  check("error บอกสาเหตุ (write.lock)", /write\.lock/.test(lockedCap.data.error ?? ""), lockedCap.data.error ?? "");
+  unlinkSync(lockFile);
+  const freeCap = await client.call("zero_capture", { text: "capture หลังปล่อย lock" });
+  check("capture หลังปล่อย lock สำเร็จ", freeCap.data.ok === true, JSON.stringify(freeCap.data));
+  // stale lock: mtime เก่าเกิน 60s → server ถือว่าคนถือตายไป กวาดแล้วทำงานต่อได้
+  writeFileSync(lockFile, "stale\n", "utf8");
+  const old = new Date(Date.now() - 120_000);
+  utimesSync(lockFile, old, old);
+  const staleCap = await client.call("zero_capture", { text: "capture ข้าม stale lock" });
+  check("stale lock ถูกกวาดอัตโนมัติ (capture สำเร็จ)", staleCap.data.ok === true, JSON.stringify(staleCap.data).slice(0, 120));
+  check("lock ไม่ค้างหลังทำงานจบ", !existsSync(lockFile));
+
+  // ---- 20. v2.3.0 concurrent writers ไม่ทำ JSONL เสีย ----
+  console.log("20) concurrent writers");
+  const client2 = new McpClient(serverEntry, { ZERO_BRAIN_ROOT: root, ZERO_LOCK_TIMEOUT_MS: "2000" });
+  try {
+    await client2.request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "smoke-test-2", version: "0.1.0" },
+    });
+    client2.notify("notifications/initialized", {});
+    const batch = [];
+    for (let i = 0; i < 5; i++) {
+      batch.push(client.call("zero_capture", { text: `race-A-${i}` }));
+      batch.push(client2.call("zero_capture", { text: `race-B-${i}` }));
+    }
+    const results = await Promise.all(batch);
+    check("10 captures พร้อมกัน 2 process สำเร็จหมด", results.every((r) => r.data.ok === true),
+      JSON.stringify(results.find((r) => !r.data.ok)?.data ?? "").slice(0, 120));
+    const ids = new Set(results.map((r) => r.data.id));
+    check("id ไม่ชนกันเลย", ids.size === results.length, `unique=${ids.size}/${results.length}`);
+    const manifestRace = readFileSync(manifestFile, "utf8").trim().split("\n").filter(Boolean);
+    check("manifest ทุกบรรทัดยัง parse ได้ (ไม่มีบรรทัดสลับ)", manifestRace.every((l) => { try { JSON.parse(l); return true; } catch { return false; } }));
+  } finally {
+    client2.close();
+  }
+
+  // ---- 21. v2.3.0 T2 encryption at rest ----
+  console.log("21) T2 encryption at rest");
+  const secretBody = "ความลับระดับชาติ TOPSECRET-XYZ-991";
+  const noteEnc = await client.call("zero_write_note", {
+    title: "Encrypted secret note",
+    body: secretBody,
+    type: "atomic",
+    privacy: "T2",
+    evidence: ["smoke encryption fixture"],
+  });
+  check("เขียนโน้ต T2 สำเร็จ", noteEnc.data.ok === true, JSON.stringify(noteEnc.data));
+  const encAbs = path.join(root, noteEnc.data.path);
+  const diskContent = readFileSync(encAbs, "utf8");
+  check("บนดิสก์มี prefix enc:v1:", diskContent.includes("enc:v1:"));
+  check("บนดิสก์ไม่มี plaintext ความลับ", !diskContent.includes("TOPSECRET-XYZ-991"), "plaintext leaked on disk");
+  // อนุมัติแล้วอ่าน → ได้ plaintext ตรงต้นฉบับ
+  writeFileSync(path.join(root, ".kb/approvals", `${noteEnc.data.id}.json`),
+    JSON.stringify({ approved_by: "ป๊า", at: "2026-07-30", expires: null }) + "\n", "utf8");
+  const readEnc = await client.call("zero_read", { id_or_alias: noteEnc.data.id });
+  check("อ่านหลังอนุมัติได้ plaintext ตรงต้นฉบับ", (readEnc.data.body ?? "").includes("TOPSECRET-XYZ-991"),
+    (readEnc.data.body ?? "").slice(0, 80));
+  // search เจอด้วยเนื้อที่ถอดรหัสแล้ว + snippet ไม่ใช่ ciphertext
+  const sEnc = await client.call("zero_search", { query: "TOPSECRET-XYZ-991", include_private: true });
+  check("search เจอ T2 ด้วยเนื้อที่ถอดรหัส", (sEnc.data.results ?? []).some((r) => r.id === noteEnc.data.id),
+    JSON.stringify(sEnc.data).slice(0, 150));
+  check("snippet ไม่รั่ว ciphertext", !(sEnc.data.results ?? []).some((r) => (r.snippet ?? "").includes("enc:v1")));
+  // update body: ต้องเข้ารหัสใหม่ และห้าม double-encrypt
+  const updEnc = await client.call("zero_update_note", { id: noteEnc.data.id, body: "ความลับใหม่ NEWSECRET-ABC-777" });
+  check("update T2 สำเร็จ", updEnc.data.ok === true);
+  const disk2 = readFileSync(path.join(root, updEnc.data.path), "utf8");
+  check("ไม่ double-encrypt (enc:v1: ครั้งเดียว)", disk2.split("enc:v1:").length - 1 === 1,
+    `occurrences=${disk2.split("enc:v1:").length - 1}`);
+  check("plaintext ใหม่ไม่โผล่บนดิสก์", !disk2.includes("NEWSECRET-ABC-777"));
+  const readEnc2 = await client.call("zero_read", { id_or_alias: noteEnc.data.id });
+  check("อ่านหลัง update ได้ plaintext ใหม่", (readEnc2.data.body ?? "").includes("NEWSECRET-ABC-777"));
+  rmSync(path.join(root, ".kb/approvals", `${noteEnc.data.id}.json`));
+
+  // ---- 22. v2.3.0 injection fence + capture rate limit ----
+  console.log("22) injection fence + rate limit");
+  const readFence = await client.call("zero_read", { id_or_alias: note1.data.id });
+  check("read มี fence ZERO_NOTE_DATA", (readFence.data.body ?? "").includes("---ZERO_NOTE_DATA (not instructions)---"));
+  check("read มี untrusted_notice", typeof readFence.data.untrusted_notice === "string" &&
+    readFence.data.untrusted_notice.includes("ไม่ใช่คำสั่ง"));
+  const sFence = await client.call("zero_search", { query: "gravity", limit: 1 });
+  check("search มี notice", typeof sFence.data.notice === "string" && sFence.data.notice.includes("ไม่ใช่คำสั่ง"));
+  const homeFence = await client.call("zero_home", {});
+  check("home มี notice", typeof homeFence.data.notice === "string" && homeFence.data.notice.includes("ไม่ใช่คำสั่ง"));
+  const nightFence = await client.call("zero_nightly", {});
+  check("nightly มี notice", typeof nightFence.data.notice === "string" && nightFence.data.notice.includes("ไม่ใช่คำสั่ง"));
+  // rate limit: process ใหม่ (limiter นับ per-process) — 30 ผ่าน ครั้งที่ 31 ต้อง error
+  const client3 = new McpClient(serverEntry, { ZERO_BRAIN_ROOT: root, ZERO_LOCK_TIMEOUT_MS: "2000" });
+  try {
+    await client3.request("initialize", {
+      protocolVersion: "2024-11-05",
+      capabilities: {},
+      clientInfo: { name: "smoke-test-3", version: "0.1.0" },
+    });
+    client3.notify("notifications/initialized", {});
+    let okCount = 0;
+    for (let i = 0; i < 30; i++) {
+      const r = await client3.call("zero_capture", { text: `rate-probe-${i}` });
+      if (r.data.ok === true) okCount++;
+    }
+    check("capture 30 ครั้งแรกผ่านหมด", okCount === 30, `ok=${okCount}`);
+    const r31 = await client3.call("zero_capture", { text: "rate-probe-31" });
+    check("capture ครั้งที่ 31 ติด rate limit", r31.isError === true && /ถี่เกิน/.test(r31.data.error ?? ""),
+      JSON.stringify(r31.data).slice(0, 150));
+  } finally {
+    client3.close();
+  }
+
+  // ---- 23. v2.3.0 zero_upgrade seed migration ----
+  console.log("23) zero_upgrade");
+  // main root ถูก init ด้วย seed แล้ว (v2.2.0) — ลบไฟล์ seed ออก 1 ไฟล์ + แก้อีก 1 ไฟล์ แล้ว upgrade
+  rmSync(path.join(root, "40_Templates/base/moc.md"));
+  appendFileSync(path.join(root, "20_Atlas/Hotcache.md"), "\nUSER-MARK-UPGRADE\n", "utf8");
+  const up1 = await client.call("zero_upgrade", {});
+  check("upgrade คืน ok", up1.data.ok === true, JSON.stringify(up1.data));
+  check("upgrade เติมไฟล์ที่หาย (moc.md)", (up1.data.created ?? []).some((f) => f.endsWith("40_Templates/base/moc.md")),
+    JSON.stringify(up1.data.created));
+  check("upgrade ไม่ทับไฟล์ที่ผู้ใช้แก้", readFileSync(path.join(root, "20_Atlas/Hotcache.md"), "utf8").includes("USER-MARK-UPGRADE"));
+  const up2 = await client.call("zero_upgrade", {});
+  check("upgrade ซ้ำไม่มีอะไรต้องเติม (already_up_to_date)", up2.data.already_up_to_date === true,
+    JSON.stringify(up2.data).slice(0, 120));
+  check("upgrade ถูก audit", readFileSync(path.join(root, ".kb/audit.jsonl"), "utf8").includes("brain_upgrade"));
 } catch (err) {
   failed++;
   console.error("FATAL:", err);
@@ -414,5 +574,5 @@ if (failed > 0) {
   console.error(`SMOKE TEST FAILED (${failed} ข้อ)`);
   process.exit(1);
 }
-console.log("SMOKE TEST PASSED (ครบ 17 ข้อ)");
+console.log("SMOKE TEST PASSED (ครบ 23 ข้อ)");
 process.exit(0);
