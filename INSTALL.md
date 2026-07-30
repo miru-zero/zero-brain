@@ -10,7 +10,7 @@
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-ทำครบ: clone/update → npm install → build → init สมอง → smoke → พิมพ์ MCP config ให้วาง — **ไม่ต้องมี AI ในลูป** (งาน install/ops ต้อง zero-token ตาม Token Budget Policy)
+ทำครบ: clone/update → npm install → build → init สมอง → smoke → **ผูก Zero เข้าทุก agent client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.ps1`: codex / kimi-claw / kimi-code / daimon — idempotent, backup ทุกไฟล์) — **ไม่ต้องมี AI ในลูป** (งาน install/ops ต้อง zero-token ตาม Token Budget Policy)
 
 ### ทำมือทีละขั้น
 
@@ -70,6 +70,19 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 miru_zero: เปลี่ยน `ZERO_BRAIN_ACTOR` เป็น `"miru-zero"` (อย่างอื่นเหมือนกัน)
 
 ทุก mutation/read-T1/block-T2 จะถูกจารึกลง audit.jsonl พร้อมชื่อ actor — ย้อนดูได้ด้วย zero_audit ว่าใครทำอะไร
+
+## ผูก agent ตั้งแต่ boot (install.ps1 เรียกอัตโนมัติ)
+
+`tools/setup-agents.ps1` ทำให้ client ที่มีอยู่บนเครื่องเห็น Zero ตั้งแต่ตื่น (รันซ้ำได้ ปลอดภัย — marker `ZERO:BEGIN/END` + backup `.bak-zero-setup-<เวลา>` ทุกไฟล์ที่แตะ):
+
+| client | สิ่งที่เติม | ไฟล์ |
+|---|---|---|
+| Codex | `[mcp_servers.zero-brain]` (ACTOR=codex) + ZERO block | `~/.codex/config.toml`, `~/.codex/AGENTS.md` |
+| Kimi Claw (OpenClaw) | `mcp.servers.zero-brain` (ACTOR=kimi-claw) + ZERO block | `~/.kimi/kimi-claw/openclaw.json`, `~/.kimi_openclaw/workspace/AGENTS.md` |
+| Kimi Code | `mcpServers.zero-brain` (ACTOR=kimi-code) + ZERO block + สกิลที่ขาด | `~/.kimi-code/mcp.json`, `~/.kimi-code/AGENTS.md`, `~/.kimi-code/skills/` |
+| Kimi Work (daimon) | สกิล `/zero` + `zero-brain-*` ที่ขาด | `~/.zero/share/daimon-share/daimon/skills/` |
+
+หลังรัน: restart client แต่ละตัว (codex / gateway kimi-claw / kimi-code / Kimi Work) แล้วเรียก `zero_health` ยืนยัน
 
 ## ข้อจำกัด
 

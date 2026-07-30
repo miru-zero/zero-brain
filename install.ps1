@@ -65,21 +65,8 @@ if ($LASTEXITCODE -ne 0) { Pop-Location; Die "smoke test ไม่ผ่าน �
 Pop-Location
 Ok "smoke test ผ่านครบ"
 
-# --- 5) พิมพ์ MCP config ให้วาง (ขั้นนี้ทำมือครั้งเดียว) ---
-$Dist = (Join-Path $RepoDir "dist\index.js").Replace('\', '\\')
-Write-Host ""
-Write-Host "=== ขั้นสุดท้าย (ทำมือ 1 นาที): วาง block นี้ใน MCP config ของ client ===" -ForegroundColor Yellow
-Write-Host @"
-{
-  "mcpServers": {
-    "zero-brain": {
-      "command": "node",
-      "args": ["$Dist"],
-      "env": { "ZERO_BRAIN_ACTOR": "$Actor" }
-    }
-  }
-}
-"@
-Write-Host "แล้ว restart client เรียก zero_health → เห็น notes ครบ / 0 dead = สำเร็จ" -ForegroundColor Green
-Write-Host ""
+# --- 5) ผูก Zero เข้าทุก agent client ตั้งแต่ boot (idempotent, backup ทุกไฟล์) ---
+Info "tools\setup-agents.ps1 (codex / kimi-claw / kimi-code / daimon)"
+& (Join-Path $RepoDir "tools\setup-agents.ps1") -RepoDir $RepoDir
+if ($LASTEXITCODE -ne 0) { Die "setup-agents พัง — ดูตารางสรุปด้านบน" }
 Ok "ติดตั้งเสร็จสมบูรณ์ (ใช้ 0 token — ไม่มี AI ในลูป)"
