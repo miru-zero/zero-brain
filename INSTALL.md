@@ -110,6 +110,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-brain.ps1
 powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-brain.ps1 -Register
 ```
 
+## สำเนาก่อนแก้ไฟล์ (TIMELINE แบบ VSCode แต่ในสมอง)
+
+`tools/backup-edit.mjs` — ก่อนแก้/ลบไฟล์ใดก็ตาม สำเนาต้นฉบับเข้า `99_System/backup_edit/<วันที่>/` ทุกครั้ง (ไม่ทับกัน, นามสกุล `.bak` ไม่ปน Obsidian graph) — ย้อนได้เสมอโดยไม่ต้องพึ่ง git:
+
+```bash
+node tools/backup-edit.mjs <file...>                              # สำเนาก่อนแก้
+node tools/backup-edit.mjs --list <file>                          # ดู timeline
+node tools/backup-edit.mjs --restore <file> [--at <ts>]           # ย้อน (สำเนาปัจจุบันก่อนเสมอ)
+node tools/backup-edit.mjs --init-workspace <project-dir>         # สร้าง .zero/{logs,tmp,out} ในโปรเจ็ค
+```
+
+ไฟล์รัน/log/ของชั่วคราวของทุกโปรเจ็ค → ใส่ `<project>/.zero/` เท่านั้น (กฎเต็ม: `20_Atlas/Edit Backup and Workspace Rules.md` ใน brain)
+
 ## ข้อจำกัด
 
 - actor ตอนนี้เป็นแค่ป้ายชื่อใน audit ยังไม่ใช่สิทธิ์ (ดู ROADMAP-v1.3.md)
