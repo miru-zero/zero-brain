@@ -4,9 +4,16 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { homedir } from "node:os";
 
-const SRC = "M:/Zero_Brain.bak";
-const DEST = "C:/Users/Administrator/.zero/brain";
+// portable: SRC = argv[2] หรือ ZERO_LEGACY_SRC (บังคับ — vault ต้นทางของแต่ละเครื่องไม่เหมือนกัน)
+//           DEST = argv[3] > ZERO_BRAIN_ROOT > ~/.zero/brain
+const SRC = process.argv[2] ?? process.env.ZERO_LEGACY_SRC;
+const DEST = process.argv[3] ?? process.env.ZERO_BRAIN_ROOT ?? path.join(homedir(), ".zero", "brain");
+if (!SRC) {
+  console.error("usage: node tools/import-legacy.mjs <legacy-vault-src> [brain-dest]  (หรือตั้ง ZERO_LEGACY_SRC)");
+  process.exit(1);
+}
 
 const MAPPINGS = [
   { src: "00 Atlas", dst: "20_Atlas", type: "moc", keepTree: false },

@@ -2,8 +2,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { homedir } from 'node:os';
 
-const BRAIN = 'C:/Users/Administrator/.zero/brain';
+// portable: argv[2] > ZERO_BRAIN_ROOT > ~/.zero/brain
+const BRAIN = process.argv[2] ?? process.env.ZERO_BRAIN_ROOT ?? path.join(homedir(), '.zero', 'brain');
 const ATLAS = path.join(BRAIN, '20_Atlas');
 const now = new Date().toISOString();
 const today = now.slice(0, 10);

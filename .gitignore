@@ -2,3 +2,4 @@ node_modules/
 dist/
 Central_Brain_seed/
 *.log
+tools/backup-brain.cmd

@@ -2,8 +2,10 @@
 // ทำเฉพาะลิงก์ที่ stem มีไฟล์จริงใน vault (resolve ได้) — นับ unresolved ก่อน/หลัง
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 
-const ROOT = 'C:/Users/Administrator/.zero/brain';
+// portable: argv[2] > ZERO_BRAIN_ROOT > ~/.zero/brain
+const ROOT = process.argv[2] ?? process.env.ZERO_BRAIN_ROOT ?? path.join(homedir(), '.zero', 'brain');
 const SKIP = new Set(['.obsidian', '.trash', '99_System/.git']);
 
 function walk(dir, out = []) {

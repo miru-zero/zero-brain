@@ -2,9 +2,11 @@
 // รายงาน ghost links + zero-inbound (orphan) แยกตาม 2 vault semantics
 import fs from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 
-const ZERO = 'C:/Users/Administrator/.zero';
-const BRAIN = path.join(ZERO, 'brain');
+// portable: argv[2] = zero zone root (default ~/.zero) · ZERO_BRAIN_ROOT override brain
+const ZERO = process.argv[2] ?? path.join(homedir(), '.zero');
+const BRAIN = process.env.ZERO_BRAIN_ROOT ?? path.join(ZERO, 'brain');
 
 function walk(dir, base, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {

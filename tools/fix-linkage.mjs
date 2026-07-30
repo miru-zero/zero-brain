@@ -5,8 +5,10 @@
 import { createHash } from "node:crypto";
 import { appendFileSync, existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { homedir } from "node:os";
 
-const DEST = "C:/Users/Administrator/.zero/brain";
+// portable: argv[2] > ZERO_BRAIN_ROOT > ~/.zero/brain (ทุกเครื่องใช้ได้ ไม่ฟิก path)
+const DEST = process.argv[2] ?? process.env.ZERO_BRAIN_ROOT ?? path.join(homedir(), ".zero", "brain");
 const sha = (b) => createHash("sha256").update(b).digest("hex");
 const posix = (p) => p.split(path.sep).join("/");
 const today = new Date().toISOString().slice(0, 10);

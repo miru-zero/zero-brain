@@ -3,11 +3,20 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { homedir } from 'node:os';
 
-const BRAIN = 'C:/Users/Administrator/.zero/brain';
-const DAIMON_SKILLS = 'C:/Users/Administrator/.zero/share/daimon-share/daimon/skills';
-const PLUGINS = 'C:/Users/Administrator/.zero/share/daimon-share/daimon/runtime/kimi-code/home/plugins/managed';
-const HACK_SRC = 'C:/Users/Administrator/Downloads/hack-skills/skills';
+// portable: zone/daimon derive จาก homedir (override ด้วย ZERO_HOME / ZERO_BRAIN_ROOT / DAIMON_ROOT)
+// HACK_SRC = argv[2] หรือ HACK_SKILLS_SRC (บังคับ — ที่เก็บ hack-skills ของแต่ละเครื่องไม่เหมือนกัน)
+const ZERO = process.env.ZERO_HOME ?? path.join(homedir(), '.zero');
+const BRAIN = process.env.ZERO_BRAIN_ROOT ?? path.join(ZERO, 'brain');
+const DAIMON = process.env.DAIMON_ROOT ?? path.join(ZERO, 'share', 'daimon-share', 'daimon');
+const DAIMON_SKILLS = path.join(DAIMON, 'skills');
+const PLUGINS = path.join(DAIMON, 'runtime', 'kimi-code', 'home', 'plugins', 'managed');
+const HACK_SRC = process.argv[2] ?? process.env.HACK_SKILLS_SRC;
+if (!HACK_SRC || !fs.existsSync(HACK_SRC)) {
+  console.error('usage: node tools/link-skills.mjs <hack-skills-src>  (หรือตั้ง HACK_SKILLS_SRC)');
+  process.exit(1);
+}
 const ATLAS = path.join(BRAIN, '20_Atlas');
 const STUBS_DIR = path.join(ATLAS, 'Skills');
 const now = new Date().toISOString();
