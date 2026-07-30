@@ -84,6 +84,8 @@ miru_zero: เปลี่ยน `ZERO_BRAIN_ACTOR` เป็น `"miru-zero"` (
 
 หลังรัน: restart client แต่ละตัว (codex / gateway kimi-claw / kimi-code / Kimi Work) แล้วเรียก `zero_health` ยืนยัน
 
+Obsidian: เปิด vault ที่ `~/.zero/brain` **เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (ไฟล์ runtime ของ daimon-share จะหลุดเข้ากราฟเป็นโหนดลอยนับพัน ดู Common Mistakes ใน skills/zero)
+
 ## ข้อจำกัด
 
 - server เป็น stdio ต่อ client — อย่าสั่งเขียนพร้อมกันจาก 2 client (ไม่มี file lock)

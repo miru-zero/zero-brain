@@ -25,10 +25,11 @@ type: standard
 
 ## Boot Check (รันเมื่อถูกเรียก)
 
-1. `~/.zero/brain/` มี `AGENTS.md` + `manifest.jsonl` → อ่าน `AGENTS.md` ก่อนเสมอ (สัญญามนุษย์-agent)
-2. MCP `zero_health` ตอบ → notes ครบ / orphans = 0 / dead links = 0 → รายงานตัวเลขให้ป๊า
-3. junction สกิล: `~/.zero/share/daimon-share/daimon/skills/` ต้องเห็นสกิล ~259 ตัว รวม `zero*` 5 ตัว (zero, zero-check, zero-brain-ai-bridge, zero-brain-evidence-report, zero-brain-memory, zero-brain-patch-guard)
-4. ผิดปกติข้อไหน → รายงาน + เสนอซ่อม ห้ามซ่อมเองถ้าเป็นงานลบ/ย้าย (กฎข้อ 1 ห้องป๊า)
+1. **เช็ค MCP ก่อนเลย** — ถ้า session นี้ไม่มี tools `zero_*` แปลว่า client ยังไม่ได้ต่อ zero-brain → รัน `~/.zero/mcp/zero-brain/tools/setup-agents.ps1` แล้วบอกป๊า restart client · **ห้าม sync/แก้ brain ด้วย file tools แทนเด็ดขาด**
+2. `~/.zero/brain/` มี `AGENTS.md` + `manifest.jsonl` → อ่าน `AGENTS.md` ก่อนเสมอ (สัญญามนุษย์-agent)
+3. MCP `zero_health` ตอบ → notes ครบ / orphans = 0 / dead links = 0 → รายงานตัวเลขให้ป๊า
+4. **Obsidian vault ต้องเปิดที่ `~/.zero/brain` เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (daimon-share/mcp จะหลุดเข้ากราฟ โหนดลอยเป็นพัน) · ถ้าเห็นโฟลเดอร์ `daimon-share` ใน vault explorer แปลว่าเปิดผิด root
+5. ผิดปกติข้อไหน → รายงาน + เสนอซ่อม ห้ามซ่อมเองถ้าเป็นงานลบ/ย้าย (กฎข้อ 1 ห้องป๊า)
 
 ## Install (เครื่องใหม่ / AI ตัวอื่นได้รับ SKILL.md นี้)
 
@@ -55,4 +56,5 @@ node test/smoke.mjs          # ต้องผ่าน 68/68 ก่อนไป
 | แก้โน้ต brain ด้วย file tools แล้วไม่ rehash | ใช้ MCP; ถ้าจำเป็นต้องแก้ตรง รัน `rehash-manifest.mjs` ทันที |
 | commit repo โดยไม่รัน smoke | `node test/smoke.mjs` 68/68 ทุกครั้งก่อน commit |
 | นับ `share/` เป็นสมอง | share = third-party runtime ซ่อนจาก Obsidian แล้ว |
+| เปิด Obsidian vault ที่ `~/.zero` ทั้งโซน | เปิดที่ `~/.zero/brain` เท่านั้น |
 | ติดตั้งแล้วไม่เช็ค `zero_health` | ไม่มีหลักฐาน = ยังไม่เสร็จ (กฎข้อ 2 ห้องป๊า) |

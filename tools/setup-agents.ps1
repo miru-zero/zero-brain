@@ -111,16 +111,40 @@ if (Test-Path $KimiCode) {
   }
 } else { Note "kimi-code" "-" "SKIP (ไม่มี ~/.kimi-code)" }
 
-# ---------- 5) Daimon / Kimi Work skills (~/.zero/share) ----------
-$DaimonSkills = Join-Path $HOME ".zero\share\daimon-share\daimon\skills"
-if (Test-Path $DaimonSkills) {
-  $skillSrc = Join-Path $RepoDir "skills"
-  Get-ChildItem $skillSrc -Directory | ForEach-Object {
-    $target = Join-Path $DaimonSkills $_.Name
-    if (-not (Test-Path $target)) { Copy-Item $_.FullName $target -Recurse; Note "daimon" "skill $($_.Name)" "COPIED" }
-    else { Note "daimon" "skill $($_.Name)" "OK (มีอยู่แล้ว)" }
+# ---------- 5) Daimon / Kimi Work (~/.zero/share) — MCP + skills ----------
+$DaimonRoot = @(
+  (Join-Path $HOME ".zero\share\daimon-share\daimon"),
+  (Join-Path $HOME ".zero\daimon-share\daimon")
+) | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($DaimonRoot) {
+  # 5a) MCP: daimon อ่าน runtime/kimi-code/home/mcp.json — ถ้าไม่ต่อ zero_* จะไม่มีใน session เลย
+  $DaimonHome = Join-Path $DaimonRoot "runtime\kimi-code\home"
+  if (Test-Path $DaimonHome) {
+    $mcpJson = Join-Path $DaimonHome "mcp.json"
+    $m = $null
+    if (Test-Path $mcpJson) { try { $m = Get-Content $mcpJson -Raw | ConvertFrom-Json } catch { $m = $null } }
+    if ($null -eq $m) { $m = [pscustomobject]@{ mcpServers = [pscustomobject]@{} } }
+    if (-not $m.PSObject.Properties["mcpServers"]) { $m | Add-Member -NotePropertyName "mcpServers" -NotePropertyValue ([pscustomobject]@{}) }
+    if ($m.mcpServers.PSObject.Properties["zero-brain"]) { Note "daimon" "mcp.json" "OK (มีอยู่แล้ว)" }
+    else {
+      if (Test-Path $mcpJson) { Backup $mcpJson }
+      $srv = [pscustomobject]@{ command = "node"; args = @($Dist); env = [pscustomobject]@{ ZERO_BRAIN_ACTOR = "kimi-work" } }
+      $m.mcpServers | Add-Member -NotePropertyName "zero-brain" -NotePropertyValue $srv
+      ($m | ConvertTo-Json -Depth 30) | Set-Content $mcpJson -Encoding UTF8
+      Note "daimon" "mcp.json" "ADDED zero-brain (restart Kimi Work)"
+    }
+  } else { Note "daimon" "mcp.json" "SKIP (ไม่มี runtime home)" }
+  # 5b) skills: เติมเฉพาะที่ขาด
+  $DaimonSkills = Join-Path $DaimonRoot "skills"
+  if (Test-Path $DaimonSkills) {
+    $skillSrc = Join-Path $RepoDir "skills"
+    Get-ChildItem $skillSrc -Directory | ForEach-Object {
+      $target = Join-Path $DaimonSkills $_.Name
+      if (-not (Test-Path $target)) { Copy-Item $_.FullName $target -Recurse; Note "daimon" "skill $($_.Name)" "COPIED" }
+      else { Note "daimon" "skill $($_.Name)" "OK (มีอยู่แล้ว)" }
+    }
   }
-} else { Note "daimon" "skills" "SKIP (ไม่มี daimon skills dir)" }
+} else { Note "daimon" "-" "SKIP (ไม่มี daimon)" }
 
 # ---------- สรุป ----------
 Write-Host ""
