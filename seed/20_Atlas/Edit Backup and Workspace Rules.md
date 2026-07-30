@@ -1,6 +1,16 @@
+---
+title: Edit Backup & Workspace Rules
+type: moc
+created: 2026-07-30
+updated: 2026-07-31
+---
+
 # Edit Backup & Workspace Rules
 
 กฎการแก้ไฟล์และวางไฟล์งานของทุก agent ในระบบ Zero — บังคับตั้งแต่ v2.3.0
+
+> ที่มา: ป๊าสั่ง 2026-07-30 ดึก (backup-first + ห้ามวางไฟล์รกโปรเจ็ค เคสเละ M:\Lab\SCB_anywhere) · เขียนเข้าระบบ 2026-07-31 00:07 (commit 1e327b3) · เชื่อมเข้ากราฟ 2026-07-31
+> เชื่อม: [[Zero]] · [[Memory Placement Rules]] · [[Brain Operating Model]] · [[Token Budget Policy]] · [[AGENTS]]
 
 ## 1) ก่อนแก้/ลบไฟล์ ต้องสำเนาเข้า backup_edit เสมอ
 

@@ -14,7 +14,7 @@ updated: 2026-07-30
 
 1. **ความจำ** — ดัชนีโน้ตทั้งหมด (สร้างอัตโนมัติตอน import/ใช้งาน เช่น `Zero_Brain Legacy Index`)
 2. **ความสามารถ** — เส้นทาง: งาน → หน้าที่ → `Skill Index` → กลุ่มสกิล → สกิล → ตัวจริง (สร้างอัตโนมัติโดย `tools/link-skills.mjs`)
-3. **ระบบ/แผนที่** — [[Home]] · [[Hotcache]] · [[Memory Placement Rules]] · [[Brain Operating Model]] · [[AGENTS]] · [[Template Index]] · [[Today]]
+3. **ระบบ/แผนที่** — [[Home]] · [[Hotcache]] · [[Memory Placement Rules]] · [[Brain Operating Model]] · [[AGENTS]] · [[Template Index]] · [[Today]] · [[Token Budget Policy]] · [[Edit Backup and Workspace Rules]]
 
 ## วิธีใช้
 
