@@ -6,7 +6,6 @@ description: >
   "ติดตั้ง zero", "zero ไม่ทำงาน". Covers the ~/.zero zone: brain vault,
   zero-brain MCP (zero_* tools), and daimon skills. Also use when an AI receives
   this SKILL.md as an install package for a fresh machine.
-type: standard
 ---
 
 # ⭕ ZERO — Boot / Health / Install ของระบบ Zero
@@ -35,13 +34,13 @@ type: standard
 
 ```powershell
 git clone https://github.com/miru-zero/zero-brain.git $HOME/.zero/mcp/zero-brain
-cd $HOME/.zero/mcp/zero-brain; npm install; npm run build
-node test/smoke.mjs          # ต้องผ่าน 68/68 ก่อนไปต่อ ห้ามข้าม
-./install.ps1                # สร้างโซน ~/.zero/brain จาก seed/ อัตโนมัติ
+cd $HOME/.zero/mcp/zero-brain
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-แล้วตั้ง MCP config ให้ client ชี้มาที่ server นี้ → เรียก `zero_health` เห็น notes ครบ / 0 dead = สำเร็จ
-ทีมงาน: ส่งไฟล์ SKILL.md นี้ให้ AI ตัวไหนก็ได้ มันสร้างโซน + ติดตั้งให้จบในตัว
+`install.ps1` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 68/68 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.ps1`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup)
+ขั้นสุดท้าย: restart client แต่ละตัว → เรียก `zero_health` เห็น notes ครบ / 0 dead = สำเร็จ
+ทีมงาน: ส่งไฟล์ SKILL.md นี้ (หรือแพ็ก `zero.skill`) ให้ AI ตัวไหนก็ได้ มันสร้างโซน + ติดตั้งให้จบในตัว
 
 ## กฎเหล็กที่ต้องเที่ยงทุกครั้ง
 
