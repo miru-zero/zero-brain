@@ -19,12 +19,12 @@ description: >
 | Path | คืออะไร | ห้าม |
 |---|---|---|
 | `~/.zero/brain/` | สมอง (Obsidian vault, 616+ โน้ต, orphan ต้อง = 0) | ห้ามแก้ไฟล์ตรงๆ นอก MCP ถ้าไม่ rehash manifest |
-| `~/.zero/mcp/zero-brain/` | repo `miru-zero/zero-brain` + MCP server (tools `zero_*`) | ห้าม commit ถ้า smoke ไม่ผ่าน 68/68 |
+| `~/.zero/mcp/zero-brain/` | repo `miru-zero/zero-brain` + MCP server (tools `zero_*`) | ห้าม commit ถ้า smoke ไม่ผ่าน 121/121 |
 | `~/.zero/share/` | ส่วนทำงาน daimon (sessions, skills, runtime) — ไม่ใช่สมอง | ห้ามนับเป็นความจำ |
 
 ## Boot Check (รันเมื่อถูกเรียก)
 
-1. **เช็ค MCP ก่อนเลย** — ถ้า session นี้ไม่มี tools `zero_*` แปลว่า client ยังไม่ได้ต่อ zero-brain → รัน `~/.zero/mcp/zero-brain/tools/setup-agents.ps1` แล้วบอกป๊า restart client · **ห้าม sync/แก้ brain ด้วย file tools แทนเด็ดขาด**
+1. **เช็ค MCP ก่อนเลย** — ถ้า session นี้ไม่มี tools `zero_*` แปลว่า client ยังไม่ได้ต่อ zero-brain → รัน `node ~/.zero/mcp/zero-brain/tools/setup-agents.mjs` แล้วบอกป๊า restart client · **ห้าม sync/แก้ brain ด้วย file tools แทนเด็ดขาด**
 2. `~/.zero/brain/` มี `AGENTS.md` + `manifest.jsonl` → อ่าน `AGENTS.md` ก่อนเสมอ (สัญญามนุษย์-agent)
 3. MCP `zero_health` ตอบ → notes ครบ / orphans = 0 / dead links = 0 → รายงานตัวเลขให้ป๊า
 4. **Obsidian vault ต้องเปิดที่ `~/.zero/brain` เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (daimon-share/mcp จะหลุดเข้ากราฟ โหนดลอยเป็นพัน) · ถ้าเห็นโฟลเดอร์ `daimon-share` ใน vault explorer แปลว่าเปิดผิด root
@@ -38,8 +38,8 @@ cd $HOME/.zero/mcp/zero-brain
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-`install.ps1` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 68/68 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.ps1`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup)
-ขั้นสุดท้าย: restart client แต่ละตัว → เรียก `zero_health` เห็น notes ครบ / 0 dead = สำเร็จ
+`install.ps1` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 121/121 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup, ใส่ตัวตนมิรุ+BOOT เป็น system prompt)
+ขั้นสุดท้าย: restart client แต่ละตัว → `node tools/verify-install.mjs` ต้อง PASS ครบ 3 ชั้น (ไฟล์ / ตัวตน / spawn MCP จริง) = สำเร็จ
 ทีมงาน: ส่งไฟล์ SKILL.md นี้ (หรือแพ็ก `zero.skill`) ให้ AI ตัวไหนก็ได้ มันสร้างโซน + ติดตั้งให้จบในตัว
 
 ## กฎเหล็กที่ต้องเที่ยงทุกครั้ง
@@ -53,7 +53,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 | ผิด | ถูก |
 |---|---|
 | แก้โน้ต brain ด้วย file tools แล้วไม่ rehash | ใช้ MCP; ถ้าจำเป็นต้องแก้ตรง รัน `rehash-manifest.mjs` ทันที |
-| commit repo โดยไม่รัน smoke | `node test/smoke.mjs` 68/68 ทุกครั้งก่อน commit |
+| commit repo โดยไม่รัน smoke | `node test/smoke.mjs` 121/121 ทุกครั้งก่อน commit |
 | นับ `share/` เป็นสมอง | share = third-party runtime ซ่อนจาก Obsidian แล้ว |
 | เปิด Obsidian vault ที่ `~/.zero` ทั้งโซน | เปิดที่ `~/.zero/brain` เท่านั้น |
-| ติดตั้งแล้วไม่เช็ค `zero_health` | ไม่มีหลักฐาน = ยังไม่เสร็จ (กฎข้อ 2 ห้องป๊า) |
+| ติดตั้งแล้วไม่เช็ค verify | `node tools/verify-install.mjs` PASS 3 ชั้น = เสร็จจริง (กฎข้อ 2 ห้องป๊า) |

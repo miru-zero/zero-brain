@@ -24,7 +24,7 @@ function note(client, item, status) {
 }
 function backup(p) {
   const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-  copyFileSync(p, `${p}.bak-zero-setup-${stamp}`);
+  cpSync(p, `${p}.bak-zero-setup-${stamp}`, { recursive: true }); // รองรับทั้งไฟล์และโฟลเดอร์ (skill dir)
 }
 /** TOML basic string — ใช้ JSON escaping (backslash/quote ตรงกัน) */
 const tomlStr = (s) => JSON.stringify(s);
@@ -76,6 +76,35 @@ function readJsonSafe(file) {
     return JSON.parse(readFileSync(file, "utf8").replace(/^﻿/, ""));
   } catch {
     return null;
+  }
+}
+
+// skills: sync จาก repo/skills — เติมที่ขาด + อัปเดตที่เนื้อต่าง (backup ก่อน) — เดิมข้ามถ้ามีอยู่แล้ว อัปเดตไม่ไหล
+function syncSkills(client, skillDst) {
+  const skillSrc = path.join(RepoDir, "skills");
+  if (!existsSync(skillSrc) || !existsSync(skillDst)) return;
+  for (const name of readdirSync(skillSrc, { withFileTypes: true })) {
+    if (!name.isDirectory()) continue;
+    const src = path.join(skillSrc, name.name);
+    const target = path.join(skillDst, name.name);
+    if (!existsSync(target)) {
+      cpSync(src, target, { recursive: true });
+      note(client, `skill ${name.name}`, "COPIED");
+      continue;
+    }
+    // เทียบไฟล์ทุกใบใน skill — ต่างแม้แต่ใบเดียว = อัปเดตทั้งโฟลเดอร์ (backup ก่อน)
+    const stale = readdirSync(src).some((f) => {
+      const s = path.join(src, f);
+      const t = path.join(target, f);
+      return !existsSync(t) || readFileSync(s, "utf8") !== readFileSync(t, "utf8");
+    });
+    if (stale) {
+      backup(target);
+      cpSync(src, target, { recursive: true });
+      note(client, `skill ${name.name}`, "UPDATED");
+    } else {
+      note(client, `skill ${name.name}`, "OK (มีอยู่แล้ว)");
+    }
   }
 }
 
@@ -173,19 +202,7 @@ if (existsSync(kimiCode)) {
     }
   }
   ensureBlock(path.join(kimiCode, "AGENTS.md"), "kimi-code");
-  // skills: เติมเฉพาะที่ขาดจาก repo\skills
-  const skillSrc = path.join(RepoDir, "skills");
-  const skillDst = path.join(kimiCode, "skills");
-  if (existsSync(skillSrc) && existsSync(skillDst)) {
-    for (const name of readdirSync(skillSrc, { withFileTypes: true })) {
-      if (!name.isDirectory()) continue;
-      const target = path.join(skillDst, name.name);
-      if (!existsSync(target)) {
-        cpSync(path.join(skillSrc, name.name), target, { recursive: true });
-        note("kimi-code", `skill ${name.name}`, "COPIED");
-      }
-    }
-  }
+  syncSkills("kimi-code", path.join(kimiCode, "skills"));
 } else {
   note("kimi-code", "-", "SKIP (ไม่มี ~/.kimi-code)");
 }
@@ -212,19 +229,7 @@ if (daimonRoot) {
     note("daimon", "mcp.json", "SKIP (ไม่มี runtime home)");
   }
   const daimonSkills = path.join(daimonRoot, "skills");
-  const skillSrc = path.join(RepoDir, "skills");
-  if (existsSync(daimonSkills) && existsSync(skillSrc)) {
-    for (const name of readdirSync(skillSrc, { withFileTypes: true })) {
-      if (!name.isDirectory()) continue;
-      const target = path.join(daimonSkills, name.name);
-      if (!existsSync(target)) {
-        cpSync(path.join(skillSrc, name.name), target, { recursive: true });
-        note("daimon", `skill ${name.name}`, "COPIED");
-      } else {
-        note("daimon", `skill ${name.name}`, "OK (มีอยู่แล้ว)");
-      }
-    }
-  }
+  syncSkills("daimon", daimonSkills);
   // memory vault ของ main agent โหลดเข้า context ทุก session — ผูก block (ตัวตน+boot) เข้า about_user.md
   // กันตัวตนค้าง: ที่เขียนมืออยู่เหนือ block, block เป็น managed อัปเดตตาม repo เสมอ
   ensureBlock(path.join(daimonRoot, "agents", "main", "memory", "vault", "about_user.md"), "daimon", "vault about_user.md");
