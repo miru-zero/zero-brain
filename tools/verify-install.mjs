@@ -3,8 +3,9 @@
  * verify-install.mjs — ยืนยันว่า zero-brain ติดตั้งสำเร็จจริง (ไม่ใช่แค่ไฟล์อยู่)
  * รัน: node tools/verify-install.mjs — exit 0 เมื่อผ่านทุกข้อ (FAIL ข้อเดียว = exit 1)
  *
- * เช็ค 2 ชั้น:
+ * เช็ค 3 ชั้น:
  * ชั้นไฟล์ — brain/dist/seed/node version/config 4 clients parse ได้ + entry ชี้ไฟล์จริง
+ * ชั้นตัวตน — ZERO block (ตัวตนมิรุ+BOOT) อยู่ในช่องที่ client โหลดตอนตื่น + skills ของเราครบทุก client
  * ชั้นวิ่ง — spawn dist/index.js คุย MCP จริง: initialize → tools/list → tools/call zero_health
  */
 import { existsSync, readFileSync, readdirSync } from "node:fs";
@@ -87,17 +88,49 @@ const daimonRoot = [
 if (!daimonRoot) {
   skip("daimon", "ไม่ได้ติดตั้ง Kimi Work");
 } else {
-  checkJsonClient("daimon", path.join(daimonRoot, "runtime", "kimi-code", "home", "mcp.json"));
-  const skillSrc = path.join(RepoDir, "skills");
-  const daimonSkills = path.join(daimonRoot, "skills");
-  if (existsSync(skillSrc) && existsSync(daimonSkills)) {
-    const missing = readdirSync(skillSrc, { withFileTypes: true })
-      .filter((d) => d.isDirectory())
-      .map((d) => d.name)
-      .filter((n) => !existsSync(path.join(daimonSkills, n)));
-    check("daimon skills ครบจาก repo/skills", missing.length === 0, `ขาด: ${missing.join(",")}`);
+  const runtimeHome = path.join(daimonRoot, "runtime", "kimi-code", "home");
+  if (existsSync(runtimeHome)) {
+    checkJsonClient("daimon", path.join(runtimeHome, "mcp.json"));
   } else {
-    skip("daimon skills", "ไม่มีโฟลเดอร์ skills");
+    skip("daimon", "ไม่มี runtime home");
+  }
+}
+
+// ---------- ชั้นตัวตน: agent ตื่นมาเป็นมิรุไหม (identity + BOOT อยู่ใน system-prompt channel) ----------
+// MCP ติดตั้งครบแต่ agent ไม่มีตัวตน = ตื่นมาเปล่าๆ (เคสจริงที่ป๊าเป็นห่วง) — ชั้นนี้บังคับพิสูจน์
+console.log("ชั้นตัวตน (identity + BOOT ในช่องที่ client โหลดตอนตื่น):");
+function checkIdentity(client, filePath) {
+  if (!existsSync(filePath)) {
+    skip(`${client} identity`, `ไม่มีไฟล์ ${path.basename(filePath)} — client ไม่ได้ติดตั้ง`);
+    return;
+  }
+  const t = readFileSync(filePath, "utf8");
+  check(`${client} มี ZERO block`, t.includes("ZERO:BEGIN"), filePath);
+  check(`${client} block มีตัวตนมิรุ`, t.includes("มิรุ (Miru)"));
+  check(`${client} block มี BOOT (zero_home ก่อนตอบงาน)`, t.includes("zero_home") && t.includes("BOOT"));
+}
+
+checkIdentity("codex", path.join(HOME, ".codex", "AGENTS.md"));
+checkIdentity("kimi-claw", path.join(HOME, ".kimi_openclaw", "workspace", "AGENTS.md"));
+checkIdentity("kimi-code", path.join(HOME, ".kimi-code", "AGENTS.md"));
+if (daimonRoot) {
+  checkIdentity("daimon", path.join(daimonRoot, "agents", "main", "memory", "vault", "about_user.md"));
+}
+
+// skills ของเราเองต้องอยู่ครบทุก client ที่มี skills dir (เคสจริง: เครื่องอื่นเห็นแค่ zero-brain-memory ขาด zero)
+const skillSrcAll = path.join(RepoDir, "skills");
+if (existsSync(skillSrcAll)) {
+  const repoSkills = readdirSync(skillSrcAll, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name);
+  for (const [client, dir] of [
+    ["kimi-code", path.join(HOME, ".kimi-code", "skills")],
+    ...(daimonRoot ? [["daimon", path.join(daimonRoot, "skills")]] : []),
+  ]) {
+    if (!existsSync(dir)) {
+      skip(`${client} skills`, "ไม่มีโฟลเดอร์ skills");
+      continue;
+    }
+    const missing = repoSkills.filter((n) => !existsSync(path.join(dir, n, "SKILL.md")));
+    check(`${client} skills ของเราครบจาก repo (${repoSkills.join("/")})`, missing.length === 0, `ขาด: ${missing.join(",")}`);
   }
 }
 

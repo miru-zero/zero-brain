@@ -22,7 +22,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 3. npm run init            ← สร้างโครงสมองที่ ~/.zero/brain อัตโนมัติ
 4. node test/smoke.mjs     ← ต้องผ่าน 121/121 (24 sections) ก่อนไปต่อ
 5. node tools/setup-agents.mjs   ← ผูกทุก client (absolute node, backup ทุกไฟล์)
-6. node tools/verify-install.mjs ← ผ่านทุกข้อ = สำเร็จ (spawn MCP คุย zero_health จริง)
+6. node tools/verify-install.mjs ← ผ่านทุกข้อ = สำเร็จ (3 ชั้น: ไฟล์+MCP config / ตัวตนมิรุ+BOOT ในช่องที่ client โหลดตอนตื่น+skills ครบ / spawn MCP คุย zero_health จริง)
 ```
 
 ## โครงโซนมาตรฐาน (แยก 3 ส่วนเด็ดขาด)
