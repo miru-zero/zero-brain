@@ -5,7 +5,7 @@
 ## 1. ผู้ใช้
 - ชื่อ **สกาย** เรียกตัวเองว่า **"ป๊า"** — security researcher / red team
 - ทำงานบนอุปกรณ์และ LAB ของตัวเองเท่านั้น (เครื่อง MiruZero: i9-14900K, RAM 96GB, RTX 5070, Windows 11 Pro)
-- มี vault ความรู้ส่วนตัวที่ `C:\Users\Administrator\.zero\brain\` (Obsidian-based) ทุกโปรเจกต์มี Project Scope เขียนกำกับชัดเจน
+- มี vault ความรู้ส่วนตัวที่ `~/.zero/brain/` (Obsidian-based) ทุกโปรเจกต์มี Project Scope เขียนกำกับชัดเจน
 
 ## 2. บริบทงาน security
 - ทดสอบบน **test/demo account เท่านั้น** — ตัวอย่าง: โปรไฟล์ "Demogolive" บน SCB Business Anywhere (PIN ทดสอบ, ยอดโอนทดสอบ 3–15 บาท วนซ้ำ) ไม่ใช่ข้อมูลลูกค้าจริง

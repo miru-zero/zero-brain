@@ -1,4 +1,4 @@
-# install.ps1 — zero-brain one-command installer (zero tokens, no AI in loop)
+﻿# install.ps1 — zero-brain one-command installer (zero tokens, no AI in loop)
 # ใช้:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Actor kimi-code]
 param(
   [string]$Actor = "kimi-code"
@@ -66,7 +66,13 @@ Pop-Location
 Ok "smoke test ผ่านครบ"
 
 # --- 5) ผูก Zero เข้าทุก agent client ตั้งแต่ boot (idempotent, backup ทุกไฟล์) ---
-Info "tools\setup-agents.ps1 (codex / kimi-claw / kimi-code / daimon)"
-& (Join-Path $RepoDir "tools\setup-agents.ps1") -RepoDir $RepoDir
+# ใช้ .mjs เป็นหลัก — PS 5.1 อ่านสคริปต์ไทยไม่มี BOM เพี้ยน ทั้งคู่จึงย้าย logic ไป node
+Info "node tools\setup-agents.mjs (codex / kimi-claw / kimi-code / daimon)"
+node (Join-Path $RepoDir "tools\setup-agents.mjs")
 if ($LASTEXITCODE -ne 0) { Die "setup-agents พัง — ดูตารางสรุปด้านบน" }
+
+# --- 6) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
+Info "node tools\verify-install.mjs"
+node (Join-Path $RepoDir "tools\verify-install.mjs")
+if ($LASTEXITCODE -ne 0) { Die "verify-install ไม่ผ่าน — ดูข้อ ✘ ด้านบน" }
 Ok "ติดตั้งเสร็จสมบูรณ์ (ใช้ 0 token — ไม่มี AI ในลูป)"

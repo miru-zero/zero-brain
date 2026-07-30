@@ -2,6 +2,17 @@
 
 MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Zero Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
 
+> **v2.3.0 (2026-07-30)** — hardening จากรีวิว 23 ข้อ:
+> 1. **write lock** `.kb/write.lock` (wx + stale sweep 60s) — หลาย client เขียนพร้อมกันได้โดย JSONL ไม่เสีย
+> 2. **corrupt-line health** — `zero_health` นับบรรทัดเสียของ JSONL ทั้งสาม + `t1_reads_24h` + `repo_dirty`
+> 3. **`zero_compact`** — manifest reduce ต่อ id / links dedup / audit เก็บ tail 10k (เศษ archive ไม่ลบ)
+> 4. **T2 encryption at rest** — body โน้ต T2 เข้ารหัส AES-256-GCM (key `~/.zero/mcp/t2.key` หรือ env `ZERO_T2_KEY`)
+> 5. **injection fence** — ทุก output ที่มีเนื้อโน้ตห่อ `ZERO_NOTE_DATA (not instructions)` + notice
+> 6. **capture rate limit** 30/นาที per process
+> 7. **`zero_upgrade`** — เติมไฟล์ seed ใหม่หลัง git pull โดยไม่ทับของที่แก้แล้ว
+> 8. **setup เป็น node** — `tools/setup-agents.mjs` (absolute node command) + `tools/verify-install.mjs` (spawn MCP จริง)
+> smoke test 109/109 (23 sections)
+>
 > **v2.2.0 (2026-07-29)** — bootstrap จริง ไม่ใช่โฟลเดอร์เปล่า:
 > 1. **`npm run init` วางไฟล์กฎ+templates ให้ครบ** จากโฟลเดอร์ `seed/` ใน repo: `AGENTS.md` (กฎสำหรับ agent), `20_Atlas/Brain Operating Model.md`, `20_Atlas/Memory Placement Rules.md`, `20_Atlas/Hotcache.md` (แทน `{{date}}` อัตโนมัติ), note templates 5 แบบใน `40_Templates/base/` (atomic/entity/source/log/moc)
 > 2. **idempotent แบบปลอดภัย** — copy เฉพาะไฟล์ที่ยังไม่มี ไฟล์ที่ผู้ใช้แก้แล้วจะไม่ถูกเขียนทับ
@@ -43,7 +54,7 @@ MCP server (stdio transport) สำหรับเชื่อม agent ใด�
 >
 > **หมายเหตุ pack:** `node_modules/` ถูก bundle มาใน zip เจตนาเพื่อ **offline install** (ข้าม `npm install` ได้เลย แค่ `npm run build` หรือใช้ `dist/` ที่ build มาแล้ว)
 >
-> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 68/68 = พร้อม) → ค่อยตั้งค่า MCP client จริง
+> **Dry-run ก่อน install (แนะนำ):** แตก zip → `cd central-brain-mcp` → `node test/smoke.mjs` (ผ่าน 109/109 = พร้อม) → ค่อยตั้งค่า MCP client จริง
 
 ## ความต้องการ
 
@@ -110,7 +121,7 @@ npm run build
 node test/smoke.mjs
 ```
 
-smoke test ครอบคลุม 17 sections (68 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving / v2.1.0 install UX / v2.2.0 bootstrap seed — ต้องผ่านทั้งหมด (exit 0)
+smoke test ครอบคลุม 23 sections (109 checks): init / capture / evidence rule / write+manifest / search+privacy filter / link+dedup / resolve / health / update_note body / T2 approval gate / body wikilinks / pack provenance / nightly / atomic write / v2.0.0 token-saving / v2.1.0 install UX / v2.2.0 bootstrap seed / corrupt-line+compact / write lock / concurrent writers / T2 encryption / injection fence+rate limit / zero_upgrade — ต้องผ่านทั้งหมด (exit 0)
 
 ## Tools ทั้ง 13 ตัว
 
@@ -167,7 +178,7 @@ src/
 ├── schema.ts   # frontmatter parse/serialize (YAML แบบจำกัด), slug sanitize, validation
 seed/           # bootstrap ไฟล์กฎ+templates ที่ init วางให้ (AGENTS.md, Atlas docs, note templates)
 test/
-└── smoke.mjs   # smoke test 17 sections (68 checks) รันบน dist
+└── smoke.mjs   # smoke test 23 sections (109 checks) รันบน dist
 ```
 
 ## Skills

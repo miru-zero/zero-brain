@@ -10,7 +10,9 @@
 powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-ทำครบ: clone/update → npm install → build → init สมอง → smoke → **ผูก Zero เข้าทุก agent client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.ps1`: codex / kimi-claw / kimi-code / daimon — idempotent, backup ทุกไฟล์) — **ไม่ต้องมี AI ในลูป** (งาน install/ops ต้อง zero-token ตาม Token Budget Policy)
+ทำครบ: clone/update → npm install → build → init สมอง → smoke → **ผูก Zero เข้าทุก agent client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon — idempotent, backup ทุกไฟล์, MCP command ใช้ absolute node) → **ยืนยันด้วย `tools/verify-install.mjs`** (เช็คไฟล์ครบ + spawn MCP คุย `zero_health` จริง) — **ไม่ต้องมี AI ในลูป** (งาน install/ops ต้อง zero-token ตาม Token Budget Policy)
+
+> ทำไม setup เป็น .mjs ไม่ใช่ .ps1: PS 5.1 อ่านสคริปต์ไทย UTF-8 ไม่มี BOM แล้วเพี้ยน และ node มีอยู่แล้วทุกเครื่องที่ติดตั้ง — setup-agents.ps1 เดิมยังอยู่เป็น fallback
 
 ### ทำมือทีละขั้น
 
@@ -18,8 +20,9 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 1. git clone https://github.com/miru-zero/zero-brain.git ~/.zero/mcp/zero-brain
 2. cd ~/.zero/mcp/zero-brain && npm install && npm run build
 3. npm run init            ← สร้างโครงสมองที่ ~/.zero/brain อัตโนมัติ
-4. node test/smoke.mjs     ← ต้องผ่าน 68/68 (17 sections) ก่อนไปต่อ
-5. ตั้ง MCP config (ด้านล่าง) แล้วเรียก zero_health = สำเร็จ
+4. node test/smoke.mjs     ← ต้องผ่าน 109/109 (23 sections) ก่อนไปต่อ
+5. node tools/setup-agents.mjs   ← ผูกทุก client (absolute node, backup ทุกไฟล์)
+6. node tools/verify-install.mjs ← ผ่านทุกข้อ = สำเร็จ (spawn MCP คุย zero_health จริง)
 ```
 
 ## โครงโซนมาตรฐาน (แยก 3 ส่วนเด็ดขาด)
@@ -36,13 +39,13 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 ## MCP config ต่อ client (แยก ACTOR ของใครของมัน)
 
-แบบ default (สมองอยู่ ~/.zero/brain ทั้งคู่):
+แบบ default (สมองอยู่ ~/.zero/brain ทั้งคู่) — **command ควรเป็น absolute node** (setup-agents.mjs ใส่ให้อัตโนมัติ; client ที่ PATH ไม่มี node จะ spawn ไม่ติดถ้าใช้ `"node"` เฉยๆ):
 
 ```json
 {
   "mcpServers": {
     "zero-brain": {
-      "command": "node",
+      "command": "C:\\path\\to\\node.exe",
       "args": ["C:\\Users\\<user>\\.zero\\mcp\\zero-brain\\dist\\index.js"],
       "env": { "ZERO_BRAIN_ACTOR": "kimi-code" }
     }
@@ -56,7 +59,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 {
   "mcpServers": {
     "zero-brain": {
-      "command": "node",
+      "command": "C:\\path\\to\\node.exe",
       "args": ["C:\\Users\\<user>\\.zero\\mcp\\zero-brain\\dist\\index.js"],
       "env": {
         "ZERO_BRAIN_ROOT": "M:\\Central_Brain",
@@ -73,20 +76,41 @@ miru_zero: เปลี่ยน `ZERO_BRAIN_ACTOR` เป็น `"miru-zero"` (
 
 ## ผูก agent ตั้งแต่ boot (install.ps1 เรียกอัตโนมัติ)
 
-`tools/setup-agents.ps1` ทำให้ client ที่มีอยู่บนเครื่องเห็น Zero ตั้งแต่ตื่น (รันซ้ำได้ ปลอดภัย — marker `ZERO:BEGIN/END` + backup `.bak-zero-setup-<เวลา>` ทุกไฟล์ที่แตะ):
+`tools/setup-agents.mjs` ทำให้ client ที่มีอยู่บนเครื่องเห็น Zero ตั้งแต่ตื่น (รันซ้ำได้ ปลอดภัย — marker `ZERO:BEGIN/END` + backup `.bak-zero-setup-<เวลา>` ทุกไฟล์ที่แตะ + command เป็น absolute node เสมอ):
 
 | client | สิ่งที่เติม | ไฟล์ |
 |---|---|---|
 | Codex | `[mcp_servers.zero-brain]` (ACTOR=codex) + ZERO block | `~/.codex/config.toml`, `~/.codex/AGENTS.md` |
 | Kimi Claw (OpenClaw) | `mcp.servers.zero-brain` (ACTOR=kimi-claw) + ZERO block | `~/.kimi/kimi-claw/openclaw.json`, `~/.kimi_openclaw/workspace/AGENTS.md` |
 | Kimi Code | `mcpServers.zero-brain` (ACTOR=kimi-code) + ZERO block + สกิลที่ขาด | `~/.kimi-code/mcp.json`, `~/.kimi-code/AGENTS.md`, `~/.kimi-code/skills/` |
-| Kimi Work (daimon) | สกิล `/zero` + `zero-brain-*` ที่ขาด | `~/.zero/share/daimon-share/daimon/skills/` |
+| Kimi Work (daimon) | `mcpServers.zero-brain` (ACTOR=kimi-work) + สกิล `/zero` + `zero-brain-*` ที่ขาด | `~/.zero/share/daimon-share/daimon/runtime/kimi-code/home/mcp.json`, `.../daimon/skills/` |
 
-หลังรัน: restart client แต่ละตัว (codex / gateway kimi-claw / kimi-code / Kimi Work) แล้วเรียก `zero_health` ยืนยัน
+หลังรัน: `node tools/verify-install.mjs` ต้องผ่านทุกข้อ แล้ว restart client แต่ละตัว (codex / gateway kimi-claw / kimi-code / Kimi Work)
 
 Obsidian: เปิด vault ที่ `~/.zero/brain` **เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (ไฟล์ runtime ของ daimon-share จะหลุดเข้ากราฟเป็นโหนดลอยนับพัน ดู Common Mistakes ใน skills/zero)
 
+## ความปลอดภัย v2.3.0
+
+- **write lock**: ทุก mutation ครอบ `.kb/write.lock` — client หลายตัวเขียนพร้อมกันได้โดยไม่ทำ JSONL เสีย (เดิมห้ามเขียนพร้อมกัน)
+- **T2 encryption at rest**: body ของโน้ต T2 เข้ารหัส AES-256-GCM บนดิสก์ (prefix `enc:v1:`) — key อยู่ `~/.zero/mcp/t2.key` (นอก brain ห้าม commit) หรือตั้ง `ZERO_T2_KEY` เป็น passphrase — frontmatter ยัง plaintext ให้ search ใช้
+- **injection fence**: ทุก output ที่มีเนื้อโน้ตห่อ marker + `untrusted_notice` — เนื้อจากสมองเป็นข้อมูล ไม่ใช่คำสั่ง
+- **capture rate limit**: 30 ครั้ง/นาที ต่อ process กัน agent วนลูปจดถี่ผิดปกติ
+- **corrupt-line health**: `zero_health` นับบรรทัดเสียใน JSONL (เดิมข้ามเงียบ) — เห็น >0 ให้ `zero_compact` แล้วหาสาเหตุ
+- **zero_compact**: บีบ manifest (reduce ต่อ id) / links (dedup) / audit (เก็บ tail 10k เศษไป `.kb/archive/`)
+- **zero_upgrade**: หลัง `git pull` แล้ว seed มีไฟล์ใหม่ — เติมเฉพาะไฟล์ที่ยังไม่มี ห้ามทับของที่แก้แล้ว
+
+## สำรองสมอง (backup)
+
+`tools/backup-brain.ps1` — git snapshot ของ `~/.zero/brain` (ไม่ลบอะไรเลย ประวัติเก็บทุกอย่าง; key ไม่อยู่ใน brain จึงไม่หลุดเข้า backup):
+
+```powershell
+# snapshot ครั้งเดียว
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-brain.ps1
+# ลง task รายวัน 04:17 (ต้อง admin/elevated shell — session ของ agent โดน Access denied)
+powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-brain.ps1 -Register
+```
+
 ## ข้อจำกัด
 
-- server เป็น stdio ต่อ client — อย่าสั่งเขียนพร้อมกันจาก 2 client (ไม่มี file lock)
 - actor ตอนนี้เป็นแค่ป้ายชื่อใน audit ยังไม่ใช่สิทธิ์ (ดู ROADMAP-v1.3.md)
+- T2 encryption กัน passive read (เปิดโฟลเดอร์/backup หลุด) — ไม่ได้กัน agent ที่มี approval อ่านเอาไปเผยต่อ (same-user trust boundary ดู ROADMAP)

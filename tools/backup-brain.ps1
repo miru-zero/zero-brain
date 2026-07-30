@@ -1,0 +1,55 @@
+﻿# backup-brain.ps1 — daily git snapshot of ~/.zero/brain
+# Zero delete policy: history keeps everything; .gitignore only excludes transient state.
+# Usage:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File backup-brain.ps1            # one-off snapshot
+#   powershell -NoProfile -ExecutionPolicy Bypass -File backup-brain.ps1 -Register  # install daily 04:17 task
+param(
+  [string]$Brain = (Join-Path $HOME ".zero\brain"),
+  [switch]$Register
+)
+$ErrorActionPreference = 'Stop'
+
+if ($Register) {
+  $taskName = 'ZeroBrainBackup'
+  $cmdWrapper = Join-Path (Split-Path $PSCommandPath) 'backup-brain.cmd'
+  # schtasks.exe ไม่ต้องการ elevation สำหรับ task ของผู้ใช้ตัวเอง — Register-ScheduledTask โดนปฏิเสธใน session ที่ไม่ elevate
+  & schtasks.exe /Create /TN $taskName /SC DAILY /ST 04:17 /TR "`"$cmdWrapper`"" /F | Out-Null
+  if ($LASTEXITCODE -ne 0) { Write-Host "[FAIL] schtasks /Create failed ($LASTEXITCODE)"; exit 1 }
+  Write-Host "[ OK ] scheduled task '$taskName' daily at 04:17 -> $cmdWrapper"
+  exit 0
+}
+
+if (-not (Test-Path $Brain)) { Write-Host "[FAIL] brain not found: $Brain"; exit 1 }
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host "[FAIL] git not in PATH"; exit 1 }
+
+# .gitignore — exclude transient state only (never exclude memory)
+$gi = Join-Path $Brain ".gitignore"
+$want = @"
+.obsidian/workspace*
+.trash/
+.kb/write.lock
+*.tmp-*
+"@
+if (-not (Test-Path $gi) -or ((Get-Content $gi -Raw) -replace "`r`n","`n") -ne (($want -replace "`r`n","`n") + "`n")) {
+  Set-Content $gi $want -Encoding ASCII
+}
+
+Push-Location $Brain
+try {
+  if (-not (Test-Path (Join-Path $Brain ".git"))) {
+    git init -b main | Out-Null
+    Write-Host "[ .. ] git init in $Brain"
+  }
+  git add -A
+  $pending = git status --porcelain
+  if ($pending) {
+    $msg = "brain snapshot " + (Get-Date -Format "yyyy-MM-dd HH:mm")
+    git commit -m $msg --quiet
+    if ($LASTEXITCODE -ne 0) { Write-Host "[FAIL] git commit failed"; exit 1 }
+    Write-Host "[ OK ] committed: $msg"
+  } else {
+    Write-Host "[ OK ] no changes — brain unchanged since last snapshot"
+  }
+} finally {
+  Pop-Location
+}
