@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 1. git clone https://github.com/miru-zero/zero-brain.git ~/.zero/mcp/zero-brain
 2. cd ~/.zero/mcp/zero-brain && npm install && npm run build
 3. npm run init            ← สร้างโครงสมองที่ ~/.zero/brain อัตโนมัติ
-4. node test/smoke.mjs     ← ต้องผ่าน 109/109 (23 sections) ก่อนไปต่อ
+4. node test/smoke.mjs     ← ต้องผ่าน 121/121 (24 sections) ก่อนไปต่อ
 5. node tools/setup-agents.mjs   ← ผูกทุก client (absolute node, backup ทุกไฟล์)
 6. node tools/verify-install.mjs ← ผ่านทุกข้อ = สำเร็จ (spawn MCP คุย zero_health จริง)
 ```
@@ -89,6 +89,8 @@ miru_zero: เปลี่ยน `ZERO_BRAIN_ACTOR` เป็น `"miru-zero"` (
 
 Obsidian: เปิด vault ที่ `~/.zero/brain` **เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (ไฟล์ runtime ของ daimon-share จะหลุดเข้ากราฟเป็นโหนดลอยนับพัน ดู Common Mistakes ใน skills/zero)
 
+กราฟ Obsidian (ตั้งแต่ v2.3.1): กราฟวาดเส้นจาก `[[wikilinks]]` ใน body เท่านั้น — zero-brain จึง regenerate block `<!-- zero-links:begin -->…<!-- zero-links:end -->` ท้าย body ให้อัตโนมัติทุก write/update/link (ห้ามแก้ block เอง) และ `zero_write_note` ที่ไม่มี links จะเตือน "ลอย" — สีกลุ่มกราฟตามโฟลเดอร์ตั้งไว้ใน `.obsidian/graph.json` (seed ไม่ทับของเดิม)
+
 ## ความปลอดภัย v2.3.0
 
 - **write lock**: ทุก mutation ครอบ `.kb/write.lock` — client หลายตัวเขียนพร้อมกันได้โดยไม่ทำ JSONL เสีย (เดิมห้ามเขียนพร้อมกัน)
@@ -118,7 +120,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\backup-brain.ps1 -Regi
 node tools/backup-edit.mjs <file...>                              # สำเนาก่อนแก้
 node tools/backup-edit.mjs --list <file>                          # ดู timeline
 node tools/backup-edit.mjs --restore <file> [--at <ts>]           # ย้อน (สำเนาปัจจุบันก่อนเสมอ)
-node tools/backup-edit.mjs --init-workspace <project-dir>         # สร้าง .zero/{logs,tmp,out} ในโปรเจ็ค
+node tools/backup-edit.mjs --init-workspace <project-dir>         # สร้าง .zero/{logs,tmp,out} + ZERO.md (md ยึดกฎที่โปรเจ็ค)
 ```
 
 ไฟล์รัน/log/ของชั่วคราวของทุกโปรเจ็ค → ใส่ `<project>/.zero/` เท่านั้น (กฎเต็ม: `20_Atlas/Edit Backup and Workspace Rules.md` ใน brain)

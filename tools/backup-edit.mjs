@@ -85,9 +85,31 @@ function initWorkspace(dir) {
   }
   const gi = path.join(z, ".gitignore");
   if (!existsSync(gi)) {
-    writeFileSync(gi, "# .zero/ เป็นพื้นที่ทำงานส่วนตัวของ agent — git ไม่ track\n*\n", "utf8");
+    writeFileSync(gi, "# .zero/ เป็นพื้นที่ทำงานส่วนตัวของ agent — git ไม่ track\n# ยกเว้น ZERO.md (anchor กฎโปรเจ็ค — commit ได้ถ้าทีมอยากแชร์)\n*\n!ZERO.md\n", "utf8");
   }
-  console.log(JSON.stringify({ ok: true, workspace: z, dirs: ["logs", "tmp", "out"] }));
+  // ZERO.md — md ยึดที่โปรเจ็ค: agent ที่มาทำงานอ่านกฎชุดเดียวกันทุกรอบ ไม่ใช่สั่งรอบเดียวจบ
+  const zm = path.join(z, "ZERO.md");
+  if (!existsSync(zm)) {
+    const name = path.basename(abs);
+    writeFileSync(zm, [
+      `# ZERO — ${name}`,
+      ``,
+      `โปรเจ็คนี้ผูกกับ zero-brain (สมองกลางที่ \`~/.zero/brain\`) — agent ทุกตัวที่มาทำงานที่นี่อ่านไฟล์นี้ก่อนและยึดกฎทุกรอบ`,
+      ``,
+      `## สมอง`,
+      `- MCP server: \`zero-brain\` (tools ขึ้นต้น \`zero_*\`) — vault: \`~/.zero/brain\``,
+      `- Project Scope ของโปรเจ็คนี้: \`<!-- ใส่ id/title ของ Scope ใน 10_Notes/Projects -->\``,
+      `- ค้นบริบทก่อนทำงาน: \`zero_search\` / \`zero_home\``,
+      ``,
+      `## กฎทำงานในโปรเจ็คนี้`,
+      `1. แก้ไฟล์สำคัญ → สำเนาก่อนทุกครั้ง: \`node ~/.zero/mcp/zero-brain/tools/backup-edit.mjs <file>\` (timeline ย้อนได้ไม่ต้องพึ่ง git)`,
+      `2. log / tmp / output ของ agent → ใส่ \`.zero/\` (logs/, tmp/, out/) เท่านั้น ห้ามวางมั่วที่ root โปรเจ็ค`,
+      `3. โน้ตใหม่ห้ามลอย — ทุก \`zero_write_note\` ต้อง links เข้า Scope หรือ MOC อย่างน้อย 1 เส้น (กราฟ Obsidian เห็นเฉพาะ [[wikilinks]] ใน body — zero-brain regenerate block ให้อัตโนมัติ)`,
+      `4. จบงาน → \`zero_capture\` สรุปสิ่งที่ทำ/ตัดสินใจ แล้วลิงก์เข้า Project Scope ข้างบน`,
+      ``,
+    ].join("\n"), "utf8");
+  }
+  console.log(JSON.stringify({ ok: true, workspace: z, dirs: ["logs", "tmp", "out"], anchor: zm }));
 }
 
 // ---------- main ----------

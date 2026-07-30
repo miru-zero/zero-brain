@@ -28,6 +28,16 @@ node ~/.zero/mcp/zero-brain/tools/backup-edit.mjs --init-workspace <project-dir>
 - log รัน, ไฟล์ดึงดิบ, output ชั่วคราว, สคริปต์ใช้ครั้งเดียว → ใส่ `.zero/` เท่านั้น
 - ห้ามทิ้งไฟล์พวกนี้กระจายที่ root ของโปรเจ็ค (ตัวอย่างเละ: `M:\Lab\SCB_anywhere`)
 - งานสำคัญที่ต้องเก็บถาวร → ย้ายเข้า brain ผ่าน `zero_write_note` ไม่ใช่ทิ้งไว้ในโปรเจ็ค
+- `--init-workspace` สร้าง `.zero/ZERO.md` (md ยึดที่โปรเจ็ค) ด้วย — agent ที่มาทำงานทีหลังอ่านไฟล์นี้ก่อน กฎชุดเดียวกันทุกรอบ ไม่ใช่สั่งรอบเดียวจบ; ใส่ id ของ Project Scope ลงใน ZERO.md ให้เชื่อมเข้าสมองได้เลย
+
+## 2.1) โน้ตใหม่ห้ามลอย (Obsidian graph)
+
+กราฟ Obsidian วาดเส้นจาก `[[wikilinks]]` ใน **body** เท่านั้น — links ใน frontmatter (`to:`/`rel:`) กราฟไม่วาด โน้ตจะดูลอยทั้งที่ zero-brain เชื่อมอยู่ (เคสจริง: โน้ต compacted session ลอยเดี่ยว)
+
+- `zero_write_note` / `zero_update_note` / `zero_link` regenerate block `<!-- zero-links:begin --> … <!-- zero-links:end -->` ท้าย body ให้อัตโนมัติ (idempotent) — wikilink ใช้ **ชื่อไฟล์ (stem)** ไม่ใช่ id เพราะ Obsidian resolve ด้วยชื่อไฟล์เท่านั้น
+- ห้ามแก้ block นี้เอง (managed — จะถูกคำนวณใหม่ทุกครั้งที่บันทึก)
+- โน้ตที่ไม่มี links เลยจะถูกเตือน "ลอย" ตอน write — ใส่ links เข้า MOC/Project Scope อย่างน้อย 1 เส้นทุกใบ
+- T2 (เข้ารหัส) ข้าม block นี้ — frontmatter links ยังเป็นหลักฐานการเชื่อมอยู่
 
 ## 3) วินัย sub-agent (ตาม logic Miru Zero)
 

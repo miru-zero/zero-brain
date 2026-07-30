@@ -2,6 +2,12 @@
 
 MCP server (stdio transport) สำหรับเชื่อม agent ใดๆ เข้ากับ **Zero Brain** — สมองกลาง domain-agnostic ตามดีไซน์ v2.1 เก็บโน้ตเป็นไฟล์ Markdown + frontmatter บน local filesystem ล้วน **ไม่มี network call**
 
+> **v2.3.1 (2026-07-31)** — โน้ตไม่ลอยในกราฟ Obsidian อีก:
+> 1. **links block ที่กราฟ OB เห็น** — กราฟ Obsidian วาดเส้นจาก `[[wikilinks]]` ใน body เท่านั้น (frontmatter links ไม่ถูกวาด); ทุก `zero_write_note`/`zero_update_note`/`zero_link` regenerate block `<!-- zero-links:begin -->…<!-- zero-links:end -->` ท้าย body อัตโนมัติ (idempotent, wikilink ใช้ stem ไฟล์)
+> 2. **write เตือน "ลอย"** — โน้ตใหม่ไม่มี links จะได้ warning ให้ลิงก์เข้า MOC/Project Scope
+> 3. **`.zero/ZERO.md` anchor** — `backup-edit.mjs --init-workspace` สร้าง md ยึดกฎที่โปรเจ็ค (สมอง/backup-first/ห้ามลอย/จบงาน capture) agent ทีหลังอ่านกฎชุดเดียวกัน
+> smoke test 121/121 (24 sections)
+>
 > **v2.3.0 (2026-07-30)** — hardening จากรีวิว 23 ข้อ:
 > 1. **write lock** `.kb/write.lock` (wx + stale sweep 60s) — หลาย client เขียนพร้อมกันได้โดย JSONL ไม่เสีย
 > 2. **corrupt-line health** — `zero_health` นับบรรทัดเสียของ JSONL ทั้งสาม + `t1_reads_24h` + `repo_dirty`

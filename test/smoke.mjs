@@ -561,6 +561,51 @@ try {
   check("upgrade ซ้ำไม่มีอะไรต้องเติม (already_up_to_date)", up2.data.already_up_to_date === true,
     JSON.stringify(up2.data).slice(0, 120));
   check("upgrade ถูก audit", readFileSync(path.join(root, ".kb/audit.jsonl"), "utf8").includes("brain_upgrade"));
+  // ---- 24. v2.3.1 Obsidian-visible links block (กราฟ OB วาดเส้นจาก [[wikilinks]] ใน body เท่านั้น) ----
+  console.log("24) links block ที่กราฟ Obsidian เห็น");
+  // (a) write_note ที่ส่ง links ตั้งแต่เกิด → block พร้อม stem จริงในไฟล์
+  const lb1 = await client.call("zero_write_note", {
+    title: "Block link source concept",
+    body: "ต้นทางของลิงก์",
+    type: "atomic",
+    evidence: ["smoke links-block fixture"],
+    links: [{ to: note1.data.id, rel: "related" }],
+  });
+  check("เขียนโน้ตพร้อม links สำเร็จ", lb1.data.ok === true, JSON.stringify(lb1.data));
+  const lb1Body = readFileSync(path.join(root, lb1.data.path), "utf8");
+  check("block ถูกเขียนลงไฟล์ (zero-links:begin)", lb1Body.includes("<!-- zero-links:begin -->"));
+  check("block มี wikilink เป็น stem ไฟล์จริง",
+    new RegExp(`\\[\\[${note1.data.id} - [^\\]|]+\\|${note1.data.id}\\]\\]`).test(lb1Body),
+    lb1Body.slice(-300));
+  // (b) zero_link เพิ่ม → block regenerate ทั้งสองใบ (เห็นเส้นสองทิศ)
+  await client.call("zero_link", { from_id: lb1.data.id, to_id: noteT1.data.id, rel: "supports" });
+  const readLb1 = await client.call("zero_read", { id_or_alias: lb1.data.id });
+  check("read เห็น block หลัง link", (readLb1.data.body ?? "").includes("zero-links:begin") &&
+    (readLb1.data.body ?? "").includes("[["));
+  const readT1b = await client.call("zero_read", { id_or_alias: noteT1.data.id });
+  check("ฝั่งปลายลิงก์ก็มี block (เชื่อมสองทิศ)", (readT1b.data.body ?? "").includes("zero-links:begin"));
+  // (c) write_note ไม่ส่ง links → warning คำว่า "ลอย" + ไม่มี block
+  const noLink = await client.call("zero_write_note", {
+    title: "Floating note warning probe",
+    body: "โน้ตไม่มีลิงก์",
+    type: "atomic",
+    evidence: ["smoke warning fixture"],
+  });
+  check("write ไม่มี links เตือนคำว่า ลอย", (noLink.data.warnings ?? []).some((w) => w.includes("ลอย")),
+    JSON.stringify(noLink.data.warnings));
+  check("โน้ตไม่มี links ไม่สร้าง block", !readFileSync(path.join(root, noLink.data.path), "utf8").includes("zero-links:begin"));
+  // (d) update_note no-op → block ยังอันเดียว (idempotent) + เนื้อเดิมไม่หาย
+  await client.call("zero_update_note", { id: lb1.data.id });
+  const lb1Body2 = readFileSync(path.join(root, lb1.data.path), "utf8");
+  check("update no-op block ยังอันเดียว", lb1Body2.split("zero-links:begin").length - 1 === 1,
+    `occ=${lb1Body2.split("zero-links:begin").length - 1}`);
+  check("update no-op เนื้อเดิมไม่หาย", lb1Body2.includes("ต้นทางของลิงก์"));
+  // (e) T2 encrypted: update no-op แล้วไม่พัง — ciphertext คงเดิม ไม่มี block แปลกปลอม
+  const updEncNoop = await client.call("zero_update_note", { id: noteEnc.data.id });
+  check("update no-op บนโน้ต T2 สำเร็จ", updEncNoop.data.ok === true);
+  const diskEnc3 = readFileSync(path.join(root, updEncNoop.data.path), "utf8");
+  check("T2 ยัง enc:v1: ครั้งเดียว (ไม่ double-encrypt)", diskEnc3.split("enc:v1:").length - 1 === 1);
+  check("T2 ciphertext ไม่มี block แปลกปลอม", !diskEnc3.includes("zero-links:begin"));
 } catch (err) {
   failed++;
   console.error("FATAL:", err);
@@ -574,5 +619,5 @@ if (failed > 0) {
   console.error(`SMOKE TEST FAILED (${failed} ข้อ)`);
   process.exit(1);
 }
-console.log("SMOKE TEST PASSED (ครบ 23 ข้อ)");
+console.log("SMOKE TEST PASSED (ครบ 24 ข้อ)");
 process.exit(0);

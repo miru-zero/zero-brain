@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Zero Brain MCP Server (v2.3.0)
+ * Zero Brain MCP Server (v2.3.1)
  * stdio transport — local filesystem ล้วน ห้าม network call
  * กฎเหล็ก: ไม่มี delete / atomic+entity ต้องมี evidence≥1 /
  * search default ไม่คืน T1,T2 / read: T1 audit ทุกครั้ง, T2 ต้องมี approval จากป๊า
@@ -14,6 +14,10 @@
  * v2.3.0 — hardening: write lock กันหลาย client เขียนชน / corrupt-line health /
  * zero_compact บีบ JSONL / T2 encrypt at rest (AES-256-GCM) / injection fence ทุก output /
  * capture rate limit / zero_upgrade เติม seed / health เพิ่ม t1_reads_24h + repo_dirty
+ *
+ * v2.3.1 — Obsidian-visible links block: กราฟ OB วาดเส้นจาก [[wikilinks]] ใน body เท่านั้น
+ * ทุก write/update/link regenerate block ท้าย body จาก meta.links (wikilink = stem ไฟล์) /
+ * write เตือน "ลอย" เมื่อไม่มี links / backup-edit --init-workspace สร้าง .zero/ZERO.md anchor
  */
 
 import { execSync } from "node:child_process";
@@ -189,6 +193,31 @@ function atomicWrite(abs: string, content: string): void {
   renameSync(tmp, abs);
 }
 
+// ---------- Obsidian-visible links block ----------
+// กราฟ Obsidian วาดเส้นจาก [[wikilinks]] ใน body เท่านั้น — links ใน frontmatter (to:/rel:)
+// ไม่ถูกวาด ทำให้โน้ตที่ zero-brain เชื่อมอยู่ "ดูลอย" ในกราฟ (เคสจริง: compacted session ลอย)
+// ทุก write/update/link จึง regenerate block นี้จาก meta.links เสมอ (idempotent, managed)
+// wikilink target = ชื่อไฟล์ (stem) ไม่ใช่ id — Obsidian resolve ด้วยชื่อไฟล์เท่านั้น
+const LINKS_BLOCK_RE = /\n?<!-- zero-links:begin -->[\s\S]*?<!-- zero-links:end -->\n?/;
+
+function regenerateLinksBlock(body: string, meta: NoteMeta, manifest: Map<string, ManifestRecord>): string {
+  const clean = body.replace(LINKS_BLOCK_RE, "\n").replace(/\n+$/, "");
+  if (meta.links.length === 0) return clean + "\n";
+  const lines = ["<!-- zero-links:begin -->", "## เชื่อม (Obsidian graph)"];
+  for (const l of meta.links) {
+    const rec = manifest.get(l.to);
+    if (rec) {
+      const stem = path.basename(rec.path).replace(/\.md$/i, "");
+      lines.push(`- [[${stem}|${l.to}]] _(${l.rel})_`);
+    } else {
+      // ไม่มีใน manifest — ใส่ text เปล่า (ใส่ [[id]] จะเกิด ghost node รกกราฟ) — health จะเตือน dead link อยู่แล้ว
+      lines.push(`- ${l.to} _(${l.rel})_`);
+    }
+  }
+  lines.push("<!-- zero-links:end -->");
+  return clean + "\n\n" + lines.join("\n") + "\n";
+}
+
 function noteRelPath(subdir: string, meta: NoteMeta, withSlug: boolean): string {
   const name = withSlug ? `${meta.id} - ${sanitizeSlug(meta.title)}.md` : `${meta.id}.md`;
   return `${subdir}/${name}`;
@@ -324,7 +353,7 @@ function handleCapture(args: Record<string, unknown>): unknown {
 function writeNoteInner(args: Record<string, unknown>): unknown {
   ensureBrain();
   const title = getString(args, "title");
-  const body = getString(args, "body") ?? "";
+  let body = getString(args, "body") ?? "";
   const type = getString(args, "type") as NoteType | undefined;
   if (!title) throw new Error("title ห้ามว่าง");
   if (!type || !(NOTE_TYPES as readonly string[]).includes(type)) {
@@ -362,6 +391,11 @@ function writeNoteInner(args: Record<string, unknown>): unknown {
   if (lt.startsWith("สรุป") || lt.startsWith("notes on")) {
     warnings.push(`title "${title}" ดูไม่ใช่แนวคิด — โน้ตถาวรควรตั้งชื่อเป็นแนวคิด/ข้อเสนอ ไม่ใช่ "สรุป..." หรือ "notes on..."`);
   }
+  if (meta.links.length === 0) {
+    warnings.push("โน้ตไม่มี links — จะลอยในกราฟ Obsidian: ใส่ links หรือ zero_link เข้า MOC/Project Scope อย่างน้อย 1 เส้น (กฎ: โน้ตใหม่ห้ามลอย)");
+  }
+  // regenerate links block ให้กราฟ Obsidian เห็นเส้น (frontmatter links อย่างเดียวกราฟไม่วาด)
+  body = regenerateLinksBlock(body, meta, readManifest(ROOT));
   const relPath = saveNote("10_Notes", meta, body, true);
   registerAliases(meta);
   audit(ROOT, ACTOR, "brain_write_note", meta.id, `type=${type} path=${relPath}`);
@@ -405,6 +439,10 @@ function updateNoteInner(args: Record<string, unknown>): unknown {
     if (!meta.evidence.includes(e)) meta.evidence.push(e);
   }
   meta.updated = today();
+
+  // regenerate links block ทุกครั้งที่บันทึกผ่าน update (managed block — ผู้ใช้แก้เองจะถูกคำนวณใหม่)
+  // T2 ที่เข้ารหัสอยู่ข้ามไป (body เป็น ciphertext หา marker ไม่เจอ — frontmatter links ยังเป็นหลักฐานอยู่)
+  if (!isEncryptedT2(body)) body = regenerateLinksBlock(body, meta, readManifest(ROOT));
 
   const oldAbs = path.join(ROOT, relPath);
   const newRel = noteRelPath(relPath.split("/")[0] ?? "10_Notes", meta, !relPath.startsWith("00_Fleeting"));
@@ -558,7 +596,8 @@ function linkInner(args: Record<string, unknown>): unknown {
   );
   if (!dup) appendLink(ROOT, { from: fromId, to: toId, rel, created: today(), by: ACTOR });
 
-  // อัพเดท links ในไฟล์ทั้งสองใบ
+  // อัพเดท links ในไฟล์ทั้งสองใบ + regenerate links block ให้กราฟ Obsidian เห็นเส้นทั้งสองทิศ
+  const manifestForBlock = readManifest(ROOT);
   for (const [note, targetId] of [
     [fromNote, toId],
     [toNote, fromId],
@@ -568,6 +607,9 @@ function linkInner(args: Record<string, unknown>): unknown {
     }
     note.meta.updated = today();
     const abs = path.join(ROOT, note.relPath);
+    if (!isEncryptedT2(note.body)) {
+      note.body = regenerateLinksBlock(note.body, note.meta, manifestForBlock);
+    }
     const content = serializeNote({ meta: note.meta, body: note.body });
     atomicWrite(abs, content);
     upsertManifest(ROOT, {
@@ -1134,7 +1176,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.3.0" },
+  { name: "zero-brain-mcp-server", version: "2.3.1" },
   { capabilities: { tools: {} } },
 );
 
