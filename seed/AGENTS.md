@@ -29,3 +29,4 @@
 - โน้ตใหม่ทุกใบควรมี inbound link จากโน้ตอื่นหรือ index อย่างน้อย 1 เส้น (`zero_link`)
 - ไม่แน่ใจว่าควรอยู่หมวดไหน → ดู `20_Atlas/Memory Placement Rules.md` แล้วยังไม่ชัวร์ค่อยถามเจ้าของ
 - เจอโน้ตขัดแย้งกัน → อย่าลบ/แก้เอง ให้ link เชื่อมแล้วรายงานเจ้าของ
+- งบโทเค้น: อ่าน `20_Atlas/Token Budget Policy.md` ก่อนงานดีบั๊ก/รันยาว — STOP → THINK → RUN ONCE ห้าม poll loop
