@@ -6,7 +6,9 @@
  *   miru-zero : ~/.miru_zero/sessions/<hash>/<uuid>/context.jsonl
  *   kimi-code : ~/.kimi-code/sessions/<hash>/<uuid>/context.jsonl
  *   daimon    : ~/.zero/share/daimon-share/daimon/runtime/kimi-code/home/sessions/wd_*\/<id>/
- *               (state.json + agents/main/wire.jsonl + session_index.jsonl → workDir)
+ *               (state.json + agents/main/wire.jsonl + session_index.jsonl → workDir
+ *                + ชื่อห้องสะอาดจาก agents/main/sessions/hosted-logical/conversations.sqlite)
+ *   (ค้นหา normalize ตัวแยก _-/\.: เป็นช่องว่าง — "session boot" เจอ "SESSION_BOOT")
  *
  * CLI:
  *   node find-session.mjs list [--limit N] [--store S] [--json]
@@ -19,9 +21,38 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import crypto from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 
 const HOME = os.homedir();
 const DAIMON_HOME = path.join(HOME, '.zero', 'share', 'daimon-share', 'daimon', 'runtime', 'kimi-code', 'home');
+const DAIMON_SQLITE = path.resolve(DAIMON_HOME, '..', '..', '..', 'agents', 'main', 'sessions', 'hosted-logical', 'conversations.sqlite');
+
+/** normalize สำหรับค้นหา — ตัวแยก _ - / \ . : เทียบเท่าช่องว่างเดียว (กัน "session boot" พลาด "SESSION_BOOT") */
+function norm(s) {
+  return String(s || '').toLowerCase().replace(/[_\-\/\\.:]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** ชื่อห้องสะอาด (ชื่อใน sidebar) จาก hosted-logical sqlite — node:sqlite built-in (node v24) · ล็อก/ไม่รองรับ = คืนแผนที่ว่าง แล้ว fallback ไป title ของ state.json */
+function loadDaimonTitles() {
+  const map = new Map();
+  if (!fs.existsSync(DAIMON_SQLITE)) return map;
+  try {
+    const db = new DatabaseSync(DAIMON_SQLITE, { readonly: true });
+    try {
+      const rows = db
+        .prepare("SELECT kernel_session_id, title, workspace_path FROM conversations WHERE title IS NOT NULL AND title != ''")
+        .all();
+      for (const r of rows) {
+        if (r.kernel_session_id) {
+          map.set(String(r.kernel_session_id), { title: String(r.title || ''), workDir: String(r.workspace_path || '') });
+        }
+      }
+    } finally {
+      db.close();
+    }
+  } catch { /* sqlite ล็อก/อ่านไม่ได้ → fallback state.json */ }
+  return map;
+}
 
 const STORES = [
   { name: 'miru-zero', root: path.join(HOME, '.miru_zero', 'sessions'), kind: 'context' },
@@ -111,7 +142,7 @@ function chunkedGrep(file, q, { capBytes = 64 * 1024 * 1024 } = {}) {
     while (offset < limit) {
       const n = fs.readSync(fd, buf, 0, Math.min(CHUNK, limit - offset), offset);
       if (n <= 0) break;
-      const hay = carry + buf.toString('utf8', 0, n).toLowerCase();
+      const hay = norm(carry + buf.toString('utf8', 0, n));
       const i = hay.indexOf(q);
       if (i >= 0) return hay.slice(Math.max(0, i - 80), i + q.length + 80);
       carry = hay.slice(-(q.length + 200));
@@ -204,11 +235,13 @@ function loadDaimonIndex() {
 function scanDaimonStore(store) {
   const out = [];
   const idx = loadDaimonIndex();
+  const titles = loadDaimonTitles(); // ชื่อห้องสะอาดจาก sidebar (sqlite)
   for (const wdDir of walkDirs(store.root, 0)) {
     for (const sessDir of walkDirs(wdDir, 0)) {
+      const id = path.basename(sessDir);
+      if (id.startsWith('ctitle-')) continue; // session ภายในสำหรับปั้มชื่อห้อง ไม่ใช่ห้องจริง
       const st = readJsonSafe(path.join(sessDir, 'state.json'));
       if (!st) continue;
-      const id = path.basename(sessDir);
       const wire = path.join(sessDir, 'agents', 'main', 'wire.jsonl');
       let msgCount = 0, firstUser = '', firstUserAny = '';
       if (fs.existsSync(wire)) {
@@ -233,10 +266,11 @@ function scanDaimonStore(store) {
           }
         } catch { /* partial ok */ }
       }
+      const t = titles.get(id);
       out.push({
         store: store.name, id, dir: sessDir, kind: 'wire',
-        title: cleanTitle(st.title) || firstUser || truncate(stripTags(firstUserAny), 90),
-        workDir: idx.get(id)?.workDir || '',
+        title: t?.title || cleanTitle(st.title) || firstUser || truncate(stripTags(firstUserAny), 90),
+        workDir: t?.workDir || idx.get(id)?.workDir || '',
         mtime: Date.parse(st.updatedAt || '') || 0,
         msgCount,
       });
@@ -363,9 +397,10 @@ function grepSessionContent(sess, q) {
     const small = readIfSmall(f);
     let snippet;
     if (small != null) {
-      const i = small.toLowerCase().indexOf(q);
+      const ns = norm(small);
+      const i = ns.indexOf(q);
       if (i < 0) continue;
-      snippet = small.slice(Math.max(0, i - 80), i + q.length + 80);
+      snippet = ns.slice(Math.max(0, i - 80), i + q.length + 80);
     } else {
       snippet = chunkedGrep(f, q);
       if (snippet == null) continue;
@@ -379,12 +414,12 @@ function grepSessionContent(sess, q) {
 }
 
 export function findSessions(query, { limit = 20, content = false } = {}) {
-  const q = String(query || '').toLowerCase();
+  const q = norm(query);
   if (!q) return [];
   const all = listSessions({ limit: 100000 });
   const hits = [];
   for (const s of all) {
-    const meta = s.id.toLowerCase().includes(q) || (s.title || '').toLowerCase().includes(q) || (s.workDir || '').toLowerCase().includes(q);
+    const meta = norm(s.id).includes(q) || norm(s.title).includes(q) || norm(s.workDir).includes(q);
     if (meta) { hits.push(s); continue; }
     if (content) {
       const snippet = grepSessionContent(s, q);
@@ -470,11 +505,13 @@ function enrichSession(sess) {
  * แสดง 1 รายการต่อกลุ่ม อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint (ข้อความสุดท้ายของห้องใหม่สุด)
  */
 export function matchSessions(query, { limit = 20 } = {}) {
-  const q = String(query || '').toLowerCase();
+  const q = norm(query);
   if (!q) return [];
   const groups = new Map();
   for (const s of listSessions({ limit: 100000 })) {
-    const snippet = grepSessionContent(s, q);
+    // ชื่อห้อง/id/workDir match ก็นับ — ไม่บังคับ grep เนื้อ (กัน "session boot" พลาดห้อง SESSION_BOOT)
+    const metaHit = norm(s.id).includes(q) || norm(s.title).includes(q) || norm(s.workDir).includes(q);
+    const snippet = metaHit ? `[ชื่อห้อง] ${s.title || s.id}` : grepSessionContent(s, q);
     if (snippet == null) continue;
     const e = enrichSession(s);
     let g = groups.get(e.forkKey);
@@ -629,8 +666,8 @@ async function main() {
   } else {
     console.log(`find-session — ค้น+อ่าน session เก่าจริง
   list [--limit N] [--store miru-zero|kimi-code|daimon|codex] [--json]
-  find <query> [--content] [--limit N] [--json]   ค้น id/title/workDir (+เนื้อแชทถ้า --content)
-  match <query> [--limit N] [--json]              "เคยทำไหม วิธีไหน ผลไง" — จับกลุ่มห้อง fork แสดง 1 อ้างอิง N uuid
+  find <query> [--content] [--limit N] [--json]   ค้น id/ชื่อห้อง(sidebar)/workDir (+เนื้อแชทถ้า --content) — ตัวแยก _-. ไม่มีผล
+  match <query> [--limit N] [--json]              "เคยทำไหม วิธีไหน ผลไง" — match ชื่อห้อง+เนื้อ จับกลุ่มห้อง fork แสดง 1 อ้างอิง N uuid
   read <id|prefix> [--limit N] [--full] [--archives] [--json]`);
     process.exit(cmd ? 2 : 0);
   }
