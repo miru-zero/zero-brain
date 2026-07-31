@@ -30,7 +30,7 @@ description: >
 1. **เช็ค MCP ก่อนเลย** — ถ้า session นี้ไม่มี tools `zero_*` แปลว่า client ยังไม่ได้ต่อ zero-brain → รัน `node ~/.zero/mcp/zero-brain/tools/setup-agents.mjs` แล้วบอกป๊า restart client · **ห้าม sync/แก้ brain ด้วย file tools แทนเด็ดขาด**
 2. `~/.zero/brain/` มี `AGENTS.md` + `manifest.jsonl` → อ่าน `AGENTS.md` ก่อนเสมอ (สัญญามนุษย์-agent)
 3. MCP `zero_health` ตอบ → notes ครบ / orphans = 0 / dead links = 0 → รายงานตัวเลขให้ป๊า
-4. **Obsidian vault ต้องเปิดที่ `~/.zero/brain` เท่านั้น** — ห้ามเปิด `~/.zero` ทั้งโซน (daimon-share/mcp จะหลุดเข้ากราฟ โหนดลอยเป็นพัน) · ถ้าเห็นโฟลเดอร์ `daimon-share` ใน vault explorer แปลว่าเปิดผิด root
+4. **Obsidian vault = `~/.zero` ทั้งโซน โดย non-brain ถูกซ่อนอัตโนมัติ** — install รัน `tools/setup-obsidian.mjs` ซ่อน mcp/share/… 2 ชั้น (userIgnoreFilters ใน graph/search + CSS snippet ใน explorer) ให้เหลือ `brain/` ก้อนเดียว · ถ้าเห็น `daimon-share`/`mcp` โผล่ใน vault explorer แปลว่าเครื่องนั้นยังไม่ได้รัน → รัน `node ~/.zero/mcp/zero-brain/tools/setup-obsidian.mjs` แล้ว reload Obsidian (Ctrl+R)
 5. ผิดปกติข้อไหน → รายงาน + เสนอซ่อม ห้ามซ่อมเองถ้าเป็นงานลบ/ย้าย (กฎข้อ 1 ห้องป๊า)
 
 ## Install (เครื่องใหม่ / AI ตัวอื่นได้รับ SKILL.md นี้)
@@ -66,5 +66,5 @@ sandbox คลาว **ไม่มีดิสก์ถาวรและไม
 | แก้โน้ต brain ด้วย file tools แล้วไม่ rehash | ใช้ MCP; ถ้าจำเป็นต้องแก้ตรง รัน `rehash-manifest.mjs` ทันที |
 | commit repo โดยไม่รัน smoke | `node test/smoke.mjs` 121/121 ทุกครั้งก่อน commit |
 | นับ `share/` เป็นสมอง | share = third-party runtime ซ่อนจาก Obsidian แล้ว |
-| เปิด Obsidian vault ที่ `~/.zero` ทั้งโซน | เปิดที่ `~/.zero/brain` เท่านั้น |
+| เห็น mcp/share โผล่ใน Obsidian แล้วไปซ่อนมือเอง | รัน `node tools/setup-obsidian.mjs` (install ทำให้อัตโนมัติทุกเครื่อง) |
 | ติดตั้งแล้วไม่เช็ค verify | `node tools/verify-install.mjs` PASS 3 ชั้น = เสร็จจริง (กฎข้อ 2 ห้องป๊า) |

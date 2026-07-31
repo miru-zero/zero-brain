@@ -60,7 +60,11 @@ ok "smoke test ผ่านครบ"
 say "node tools/setup-agents.mjs"
 node tools/setup-agents.mjs || die "setup-agents พัง — ดูตารางสรุปด้านบน"
 
-# --- 6) verify ว่าติดตั้งสำเร็จจริง ---
+# --- 6) ซ่อน non-brain ใน Obsidian vault (userIgnoreFilters + CSS snippet, idempotent) ---
+say "node tools/setup-obsidian.mjs (ซ่อน mcp/share/… ให้เหลือ brain ก้อนเดียว)"
+node tools/setup-obsidian.mjs || die "setup-obsidian พัง — ดูข้อความด้านบน"
+
+# --- 7) verify ว่าติดตั้งสำเร็จจริง ---
 say "node tools/verify-install.mjs"
 node tools/verify-install.mjs || die "verify-install ไม่ผ่าน — ดูข้อ ✘ ด้านบน"
 ok "ติดตั้งเสร็จสมบูรณ์ (ใช้ 0 token — ไม่มี AI ในลูป)"

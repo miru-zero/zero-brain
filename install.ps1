@@ -1,4 +1,4 @@
-﻿# install.ps1 — zero-brain one-command installer (zero tokens, no AI in loop)
+# install.ps1 — zero-brain one-command installer (zero tokens, no AI in loop)
 # ใช้:  powershell -ExecutionPolicy Bypass -File install.ps1 [-Actor kimi-code]
 param(
   [string]$Actor = "kimi-code"
@@ -71,7 +71,12 @@ Info "node tools\setup-agents.mjs (codex / kimi-claw / kimi-code / daimon)"
 node (Join-Path $RepoDir "tools\setup-agents.mjs")
 if ($LASTEXITCODE -ne 0) { Die "setup-agents พัง — ดูตารางสรุปด้านบน" }
 
-# --- 6) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
+# --- 6) ซ่อน non-brain ใน Obsidian vault (userIgnoreFilters + CSS snippet, idempotent) ---
+Info "node tools\setup-obsidian.mjs (ซ่อน mcp/share/… ให้เหลือ brain ก้อนเดียว)"
+node (Join-Path $RepoDir "tools\setup-obsidian.mjs")
+if ($LASTEXITCODE -ne 0) { Die "setup-obsidian พัง — ดูข้อความด้านบน" }
+
+# --- 7) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
 Info "node tools\verify-install.mjs"
 node (Join-Path $RepoDir "tools\verify-install.mjs")
 if ($LASTEXITCODE -ne 0) { Die "verify-install ไม่ผ่าน — ดูข้อ ✘ ด้านบน" }
