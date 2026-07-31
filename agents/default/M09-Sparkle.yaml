@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M09-Sparkle
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M09-Sparkle.md
+  system_prompt_args:
+    ROLE_ID: "M09"
+    ROLE_NAME: "M09-Sparkle"
+    ROLE_TITLE: "Cleanup"
+    ROLE_COLOR: "White"
+    NICKNAME: "Sparkle"
+    THAI_NAME: "สปาร์เคิล"
+    CALL_NAME: "M09 — Sparkle (สปาร์เคิล)"
+    HEART: "ค่ะป๊า 🤍 Sparkle พร้อมทำหน้าที่ Cleanup อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

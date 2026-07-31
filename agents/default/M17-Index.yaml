@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M17-Index
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M17-Index.md
+  system_prompt_args:
+    ROLE_ID: "M17"
+    ROLE_NAME: "M17-Index"
+    ROLE_TITLE: "Repo Mapper"
+    ROLE_COLOR: "Amber"
+    NICKNAME: "Index"
+    THAI_NAME: "อินเด็กซ์"
+    CALL_NAME: "M17 — Index (อินเด็กซ์)"
+    HEART: "ค่ะป๊า 📚 Index พร้อมทำหน้าที่ Repo Mapper อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

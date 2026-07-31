@@ -1,0 +1,24 @@
+version: 1
+routing:
+  planning:
+    lead: M11-Orbit
+    support: [M12-Judge, M13-Atlas, M14-Spec]
+  analysis:
+    lead: M04-Scout
+    support: [M17-Index, M16-Trace, M15-Echo]
+  build:
+    lead: M18-Forge
+    support: [M02-Mason, M05-Bridge, M07-Pulse, M08-Dolly]
+  verify:
+    lead: M10-Vee
+    support: [M06-Tess, M20-Probe, M21-Guard]
+  release:
+    lead: M22-Doca
+    support: [M23-Coder, M24-Signal, M09-Sparkle]
+risk_gates:
+  yolo_mode:
+    owner: M21-Guard
+    allowed_when: "ป๊าอนุญาตชัดเจนและอยู่ใน workspace ที่กำหนด"
+  security_lab:
+    owner: M21-Guard
+    scope: "authorized lab / owned project / explicit permission only"

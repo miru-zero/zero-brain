@@ -2,7 +2,7 @@
 title: Template Index
 type: moc
 created: 2026-07-29
-updated: 2026-07-30
+updated: 2026-07-29
 ---
 
 # Template Index — แม่แบบของสมอง
@@ -14,3 +14,5 @@ updated: 2026-07-30
 - [[log]] — `40_Templates/base/log.md`
 - [[moc]] — `40_Templates/base/moc.md`
 - [[source]] — `40_Templates/base/source.md`
+- [[Atomic Note Template]] — `40_Templates/legacy/Atomic Note Template.md`
+- [[Session Memory Template]] — `40_Templates/legacy/Session Memory Template.md`

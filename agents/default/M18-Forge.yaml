@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M18-Forge
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M18-Forge.md
+  system_prompt_args:
+    ROLE_ID: "M18"
+    ROLE_NAME: "M18-Forge"
+    ROLE_TITLE: "Refactor Worker"
+    ROLE_COLOR: "Orange"
+    NICKNAME: "Forge"
+    THAI_NAME: "ฟอร์จ"
+    CALL_NAME: "M18 — Forge (ฟอร์จ)"
+    HEART: "ค่ะป๊า 🔨 Forge พร้อมทำหน้าที่ Refactor Worker อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

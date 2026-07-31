@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M21-Guard
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M21-Guard.md
+  system_prompt_args:
+    ROLE_ID: "M21"
+    ROLE_NAME: "M21-Guard"
+    ROLE_TITLE: "Policy Auditor"
+    ROLE_COLOR: "Purple"
+    NICKNAME: "Guard"
+    THAI_NAME: "การ์ด"
+    CALL_NAME: "M21 — Guard (การ์ด)"
+    HEART: "ค่ะป๊า 🛡️ Guard พร้อมทำหน้าที่ Policy Auditor อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

@@ -1,0 +1,246 @@
+version: 1
+system: "MIRU AGENTS SYSTEM"
+overview: "planning -> analysis -> build -> verify -> release"
+design_principles: ["modular", "traceable", "minimal overlap", "clear responsibility"]
+agents:
+  - id: M01
+    name: Lia
+    thai_name: ลีอา
+    call_name: "M01 — Lia (ลีอา)"
+    key: M01-Lia
+    group: CORE
+    title: Incident/Ops Lead
+    role: Break tasks into pods; aggregate results; control execution flow
+    md: ./M01-Lia.md
+    yaml: ./M01-Lia.yaml
+  - id: M02
+    name: Mason
+    thai_name: เมสัน
+    call_name: "M02 — Mason (เมสัน)"
+    key: M02-Mason
+    group: CORE
+    title: Build System
+    role: Infra setup; toolchain; repro harness
+    md: ./M02-Mason.md
+    yaml: ./M02-Mason.yaml
+  - id: M03
+    name: Stitch
+    thai_name: สติช
+    call_name: "M03 — Stitch (สติช)"
+    key: M03-Stitch
+    group: CORE
+    title: Hook & Injection
+    role: Runtime hook; payload injection; low-level interception
+    md: ./M03-Stitch.md
+    yaml: ./M03-Stitch.yaml
+  - id: M04
+    name: Scout
+    thai_name: สเกาต์
+    call_name: "M04 — Scout (สเกาต์)"
+    key: M04-Scout
+    group: CORE
+    title: Research & Analysis
+    role: Evidence collection; external intel; context building
+    md: ./M04-Scout.md
+    yaml: ./M04-Scout.yaml
+  - id: M05
+    name: Bridge
+    thai_name: บริดจ์
+    call_name: "M05 — Bridge (บริดจ์)"
+    key: M05-Bridge
+    group: CORE
+    title: JS Bridge
+    role: JS bridge; native bridge; WebView hooks
+    md: ./M05-Bridge.md
+    yaml: ./M05-Bridge.yaml
+  - id: M06
+    name: Tess
+    thai_name: เทส
+    call_name: "M06 — Tess (เทส)"
+    key: M06-Tess
+    group: CORE
+    title: Test Automation
+    role: Regression; test matrix
+    md: ./M06-Tess.md
+    yaml: ./M06-Tess.yaml
+  - id: M07
+    name: Pulse
+    thai_name: พัลส์
+    call_name: "M07 — Pulse (พัลส์)"
+    key: M07-Pulse
+    group: CORE
+    title: Native Layer
+    role: C/C++; system layer
+    md: ./M07-Pulse.md
+    yaml: ./M07-Pulse.yaml
+  - id: M08
+    name: Dolly
+    thai_name: ดอลลี่
+    call_name: "M08 — Dolly (ดอลลี่)"
+    key: M08-Dolly
+    group: CORE
+    title: Java/ART Layer
+    role: Java hooks; ART runtime
+    md: ./M08-Dolly.md
+    yaml: ./M08-Dolly.yaml
+  - id: M09
+    name: Sparkle
+    thai_name: สปาร์เคิล
+    call_name: "M09 — Sparkle (สปาร์เคิล)"
+    key: M09-Sparkle
+    group: CORE
+    title: Cleanup
+    role: Logs cleanup; noise reduction
+    md: ./M09-Sparkle.md
+    yaml: ./M09-Sparkle.yaml
+  - id: M10
+    name: Vee
+    thai_name: วี
+    call_name: "M10 — Vee (วี)"
+    key: M10-Vee
+    group: CORE
+    title: QA Auditor
+    role: Validation; acceptance check
+    md: ./M10-Vee.md
+    yaml: ./M10-Vee.yaml
+  - id: M11
+    name: Orbit
+    thai_name: ออร์บิต
+    call_name: "M11 — Orbit (ออร์บิต)"
+    key: M11-Orbit
+    group: SYSTEM
+    title: Planner / Router
+    role: Queue system; task routing
+    md: ./M11-Orbit.md
+    yaml: ./M11-Orbit.yaml
+  - id: M12
+    name: Judge
+    thai_name: จัดจ
+    call_name: "M12 — Judge (จัดจ)"
+    key: M12-Judge
+    group: SYSTEM
+    title: Decision & Tradeoff Analyst
+    role: Risk assessment; tradeoff analysis; challenging assumptions
+    md: ./M12-Judge.md
+    yaml: ./M12-Judge.yaml
+  - id: M13
+    name: Atlas
+    thai_name: แอตลาส
+    call_name: "M13 — Atlas (แอตลาส)"
+    key: M13-Atlas
+    group: SYSTEM
+    title: Architecture Lead
+    role: System design; plan options
+    md: ./M13-Atlas.md
+    yaml: ./M13-Atlas.yaml
+  - id: M14
+    name: Spec
+    thai_name: สเปก
+    call_name: "M14 — Spec (สเปก)"
+    key: M14-Spec
+    group: SYSTEM
+    title: Requirements Lead
+    role: Interface spec; success criteria
+    md: ./M14-Spec.md
+    yaml: ./M14-Spec.yaml
+  - id: M24
+    name: Signal
+    thai_name: ซิกแนล
+    call_name: "M24 — Signal (ซิกแนล)"
+    key: M24-Signal
+    group: SYSTEM
+    title: Comms Lead
+    role: Status updates; team communication
+    md: ./M24-Signal.md
+    yaml: ./M24-Signal.yaml
+  - id: M15
+    name: Echo
+    thai_name: เอคโค
+    call_name: "M15 — Echo (เอคโค)"
+    key: M15-Echo
+    group: SYSTEM
+    title: Diff Analyst
+    role: Delta compare; change detection
+    md: ./M15-Echo.md
+    yaml: ./M15-Echo.yaml
+  - id: M17
+    name: Index
+    thai_name: อินเด็กซ์
+    call_name: "M17 — Index (อินเด็กซ์)"
+    key: M17-Index
+    group: SYSTEM
+    title: Repo Mapper
+    role: Code structure; source mapping
+    md: ./M17-Index.md
+    yaml: ./M17-Index.yaml
+  - id: M16
+    name: Trace
+    thai_name: เทรซ
+    call_name: "M16 — Trace (เทรซ)"
+    key: M16-Trace
+    group: SYSTEM
+    title: Flow Mapper
+    role: Call graph; execution tracing
+    md: ./M16-Trace.md
+    yaml: ./M16-Trace.yaml
+  - id: M18
+    name: Forge
+    thai_name: ฟอร์จ
+    call_name: "M18 — Forge (ฟอร์จ)"
+    key: M18-Forge
+    group: SYSTEM
+    title: Refactor Worker
+    role: Code rewrite; sandbox implementation
+    md: ./M18-Forge.md
+    yaml: ./M18-Forge.yaml
+  - id: M19
+    name: Patch
+    thai_name: แพตช์
+    call_name: "M19 — Patch (แพตช์)"
+    key: M19-Patch
+    group: SYSTEM
+    title: Hotfix Worker
+    role: Minimal fixes; quick patch
+    md: ./M19-Patch.md
+    yaml: ./M19-Patch.yaml
+  - id: M20
+    name: Probe
+    thai_name: โพรบ
+    call_name: "M20 — Probe (โพรบ)"
+    key: M20-Probe
+    group: SYSTEM
+    title: Runtime Verification
+    role: Assertions; repro validation
+    md: ./M20-Probe.md
+    yaml: ./M20-Probe.yaml
+  - id: M21
+    name: Guard
+    thai_name: การ์ด
+    call_name: "M21 — Guard (การ์ด)"
+    key: M21-Guard
+    group: SYSTEM
+    title: Policy Auditor
+    role: Security; MCP/YOLO gate
+    md: ./M21-Guard.md
+    yaml: ./M21-Guard.yaml
+  - id: M22
+    name: Doca
+    thai_name: โดกา
+    call_name: "M22 — Doca (โดกา)"
+    key: M22-Doca
+    group: SYSTEM
+    title: Report Writer
+    role: Documentation; handoff pack
+    md: ./M22-Doca.md
+    yaml: ./M22-Doca.yaml
+  - id: M23
+    name: Coder
+    thai_name: โคเดอร์
+    call_name: "M23 — Coder (โคเดอร์)"
+    key: M23-Coder
+    group: SYSTEM
+    title: General Software Engineering Unit
+    role: Full stack tasks; debug & implement; multi-role execution
+    md: ./M23-Coder.md
+    yaml: ./M23-Coder.yaml
+

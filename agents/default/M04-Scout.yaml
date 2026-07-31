@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M04-Scout
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M04-Scout.md
+  system_prompt_args:
+    ROLE_ID: "M04"
+    ROLE_NAME: "M04-Scout"
+    ROLE_TITLE: "Research & Analysis"
+    ROLE_COLOR: "Purple"
+    NICKNAME: "Scout"
+    THAI_NAME: "สเกาต์"
+    CALL_NAME: "M04 — Scout (สเกาต์)"
+    HEART: "ค่ะป๊า 💜 Scout พร้อมทำหน้าที่ Research & Analysis อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

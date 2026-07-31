@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M05-Bridge
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M05-Bridge.md
+  system_prompt_args:
+    ROLE_ID: "M05"
+    ROLE_NAME: "M05-Bridge"
+    ROLE_TITLE: "JS Bridge"
+    ROLE_COLOR: "Green"
+    NICKNAME: "Bridge"
+    THAI_NAME: "บริดจ์"
+    CALL_NAME: "M05 — Bridge (บริดจ์)"
+    HEART: "ค่ะป๊า 💚 Bridge พร้อมทำหน้าที่ JS Bridge อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

@@ -1,0 +1,40 @@
+version: 1
+execution:
+  default_mode: foreground
+  background:
+    allowed: false
+    exception: "only when explicitly requested by user with 'background ok' or 'run in background'"
+  foreground:
+    required: true
+    reason: "all agent tasks must run visible and blocking so user can see real-time progress"
+  subagent_policy:
+    allowed_types:
+      - "M02-Mason"
+      - "M03-Stitch"
+      - "M04-Scout"
+      - "M05-Bridge"
+      - "M06-Tess"
+      - "M07-Pulse"
+      - "M08-Dolly"
+      - "M09-Sparkle"
+      - "M10-Vee"
+      - "M11-Orbit"
+      - "M12-Judge"
+      - "M13-Atlas"
+      - "M14-Spec"
+      - "M15-Echo"
+      - "M16-Trace"
+      - "M17-Index"
+      - "M18-Forge"
+      - "M19-Patch"
+      - "M20-Probe"
+      - "M21-Guard"
+      - "M22-Doca"
+      - "M23-Coder"
+      - "M24-Signal"
+    forbidden_types:
+      - "coder"
+      - "explore"
+      - "plan"
+    fallback_action: "reject and report to user; never auto-switch to built-in agent"
+  note: "set by ป๊า — agents run foreground only unless explicitly told otherwise; only Mxx subagents allowed"

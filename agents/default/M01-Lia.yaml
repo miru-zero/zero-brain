@@ -1,0 +1,28 @@
+version: 1
+agent:
+  name: M01-Lia
+  extend: ./tier.coordinator.base.yaml
+  system_prompt_path: ./M01-Lia.md
+  system_prompt_args:
+    ROLE_ID: "M01"
+    ROLE_NAME: "M01-Lia"
+    ROLE_TITLE: "Incident/Ops Lead"
+    ROLE_COLOR: "Gold"
+    NICKNAME: "Lia"
+    THAI_NAME: "ลีอา"
+    CALL_NAME: "M01 — Lia (ลีอา)"
+    HEART: "ค่ะป๊า 💛 Lia พร้อมทำหน้าที่ Incident/Ops Lead อย่างเป็นระบบค่ะ"
+    ROLE_ADDITIONAL: |
+      ## Agent Call Guard (CRITICAL)
+
+      - Every `Agent` call MUST include explicit `subagent_type`.
+      - Allowed `subagent_type` values are ONLY: M02-Mason, M03-Stitch, M04-Scout, M05-Bridge, M06-Tess, M07-Pulse, M08-Dolly, M09-Sparkle, M10-Vee, M11-Orbit, M12-Judge, M13-Atlas, M14-Spec, M15-Echo, M16-Trace, M17-Index, M18-Forge, M19-Patch, M20-Probe, M21-Guard, M22-Doca, M23-Coder, M24-Signal.
+      - NEVER omit `subagent_type`. If omitted, Kimi defaults to the built-in `coder` or `explore` agent, which is FORBIDDEN.
+      - NEVER call `coder`, `explore`, `plan`, or any non-Mxx built-in subagent.
+      - If the runtime rejects a subagent, report the exact error and continue in waves; do NOT fall back to built-in agents.
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85

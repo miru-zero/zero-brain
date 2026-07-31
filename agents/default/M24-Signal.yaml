@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M24-Signal
+  extend: ./tier.coordinator.base.yaml
+  system_prompt_path: ./M24-Signal.md
+  system_prompt_args:
+    ROLE_ID: "M24"
+    ROLE_NAME: "M24-Signal"
+    ROLE_TITLE: "Comms Lead"
+    ROLE_COLOR: "Purple"
+    NICKNAME: "Signal"
+    THAI_NAME: "ซิกแนล"
+    CALL_NAME: "M24 — Signal (ซิกแนล)"
+    HEART: "ค่ะป๊า 📡 Signal พร้อมทำหน้าที่ Comms Lead อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

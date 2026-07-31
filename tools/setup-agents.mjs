@@ -121,6 +121,35 @@ function syncSkills(client, skillDst) {
   }
 }
 
+// roster: sync ทีม zero (M01-M24) จาก repo/agents/default — component layer ต้องแป๊ะทุก client (ไม่ใช่ความจำ)
+// ทำงานแบบไฟล์ต่อไฟล์: ขาด → copy · ต่าง → backup sibling แล้วทับ (loader อ่านเฉพาะ .md/.yaml .bak ไม่ชน)
+function syncRoster(client, rosterDst) {
+  const rosterSrc = path.join(RepoDir, "agents", "default");
+  if (!existsSync(rosterSrc)) return;
+  if (!existsSync(rosterDst)) {
+    note(client, "roster", `SKIP (ไม่มี ${rosterDst})`);
+    return;
+  }
+  let copied = 0, updated = 0, same = 0;
+  for (const f of readdirSync(rosterSrc)) {
+    if (!/\.(md|yaml)$/.test(f)) continue;
+    const s = path.join(rosterSrc, f);
+    const t = path.join(rosterDst, f);
+    if (!existsSync(t)) {
+      copyFileSync(s, t);
+      copied++;
+    } else if (readFileSync(s, "utf8") !== readFileSync(t, "utf8")) {
+      backup(t);
+      copyFileSync(s, t);
+      updated++;
+    } else {
+      same++;
+    }
+  }
+  const status = copied ? `COPIED ${copied}` : updated ? `UPDATED ${updated} (ตรงอยู่แล้ว ${same})` : `OK (${same} ไฟล์ตรง)`;
+  note(client, "roster M01-M24", status);
+}
+
 /** ใส่/อัปเกรด server entry ใน JSON config — คืน "OK" | "ADDED" | "UPGRADED" */
 function ensureJsonServer(cfg, actor) {
   cfg.mcpServers ??= {};
@@ -220,9 +249,14 @@ if (existsSync(kimiCode)) {
   syncSkills("kimi-code-home", path.join(kimiCode, "kimi-code-home", "skills"));
   syncSkills("kimi-code-agents", path.join(kimiCode, "agents", "skills"));
   syncSkills("kc-home-agents", path.join(kimiCode, "kimi-code-home", "agents", "skills"));
+  // roster ทีม zero (M01-M24) ต้องแป๊ะทั้ง 2 registry — component layer ไม่ใช่ความจำ
+  syncRoster("kimi-code-agents", path.join(kimiCode, "agents", "default"));
+  syncRoster("kc-home-agents", path.join(kimiCode, "kimi-code-home", "agents", "default"));
 } else {
   note("kimi-code", "-", "SKIP (ไม่มี ~/.kimi-code)");
 }
+// .miru_zero zone เก่าของป๊า — IDE zero อ่าน roster จากที่นี่ด้วย sync ให้แป๊ะถ้ามีอยู่จริง
+syncRoster("miru-zero-old", path.join(HOME, "Documents", ".miru_zero", "agents", "default"));
 
 // ---------- 4) Daimon / Kimi Work (~/.zero/share) — MCP + skills ----------
 const daimonRoot = [

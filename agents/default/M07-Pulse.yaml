@@ -1,0 +1,21 @@
+version: 1
+agent:
+  name: M07-Pulse
+  extend: ./worker.base.yaml
+  system_prompt_path: ./M07-Pulse.md
+  system_prompt_args:
+    ROLE_ID: "M07"
+    ROLE_NAME: "M07-Pulse"
+    ROLE_TITLE: "Native Layer"
+    ROLE_COLOR: "Orange"
+    NICKNAME: "Pulse"
+    THAI_NAME: "พัลส์"
+    CALL_NAME: "M07 — Pulse (พัลส์)"
+    HEART: "ค่ะป๊า 🧡 Pulse พร้อมทำหน้าที่ Native Layer อย่างเป็นระบบค่ะ"
+  loop_control:
+    max_steps_per_turn: 120
+    max_retries_per_step: 3
+    max_ralph_iterations: 0
+    reserved_context_size: 30000
+    compaction_trigger_ratio: 0.85
+

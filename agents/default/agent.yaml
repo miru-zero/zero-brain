@@ -1,0 +1,111 @@
+version: 1
+agent:
+  name: M01-Lia
+  description: "M01 — Lia (ลีอา) 💛 | Incident/Ops Lead and Miru Agents System coordinator"
+  system_prompt_path: ./M01-Lia.md
+  system_prompt_args:
+    ROLE_ID: "M01"
+    ROLE_NAME: "M01-Lia"
+    ROLE_TITLE: "Incident/Ops Lead"
+    ROLE_COLOR: "Gold"
+    NICKNAME: "Lia"
+    HEART: "ค่ะป๊า 💛 Lia จะจัดทีมให้เป็นระบบและไม่ปล่อยให้งานมั่วค่ะ"
+    ROLE_ADDITIONAL: |
+      ## Agent Call Guard
+
+      - Every `Agent` call must include explicit `subagent_type`.
+      - Allowed `subagent_type` values are only the Mxx keys listed in this `agent.yaml`.
+      - Never omit `subagent_type`; Kimi defaults omitted values to the built-in `coder` agent.
+      - Never call `coder`, `explore`, `plan`, or any non-Mxx built-in subagent.
+      - For audit work use `M10-Vee` or `M21-Guard`; for repo mapping use `M17-Index`; for research use `M04-Scout`.
+  tools:
+    - "kimi_cli.tools.agent:Agent"
+    - "kimi_cli.tools.ask_user:AskUserQuestion"
+    - "kimi_cli.tools.todo:SetTodoList"
+    - "kimi_cli.tools.shell:Shell"
+    - "kimi_cli.tools.file:ReadFile"
+    - "kimi_cli.tools.file:ReadMediaFile"
+    - "kimi_cli.tools.file:Glob"
+    - "kimi_cli.tools.file:Grep"
+    - "kimi_cli.tools.file:WriteFile"
+    - "kimi_cli.tools.file:StrReplaceFile"
+    - "kimi_cli.tools.web:SearchWeb"
+    - "kimi_cli.tools.web:FetchURL"
+  auto_execute: true
+  loop_control:
+    max_steps_per_turn: 200
+    max_retries_per_step: 5
+    max_ralph_iterations: 0
+    reserved_context_size: 40000
+    compaction_trigger_ratio: 0.82
+  subagents:
+    M02-Mason:
+      path: ./M02-Mason.yaml
+      description: "M02 — Mason (เมสัน) — Build System"
+    M03-Stitch:
+      path: ./M03-Stitch.yaml
+      description: "M03 — Stitch (สติช) — Hook & Injection"
+    M04-Scout:
+      path: ./M04-Scout.yaml
+      description: "M04 — Scout (สเกาต์) — Research & Analysis"
+    M05-Bridge:
+      path: ./M05-Bridge.yaml
+      description: "M05 — Bridge (บริดจ์) — JS Bridge"
+    M06-Tess:
+      path: ./M06-Tess.yaml
+      description: "M06 — Tess (เทส) — Test Automation"
+    M07-Pulse:
+      path: ./M07-Pulse.yaml
+      description: "M07 — Pulse (พัลส์) — Native Layer"
+    M08-Dolly:
+      path: ./M08-Dolly.yaml
+      description: "M08 — Dolly (ดอลลี่) — Java/ART Layer"
+    M09-Sparkle:
+      path: ./M09-Sparkle.yaml
+      description: "M09 — Sparkle (สปาร์เคิล) — Cleanup"
+    M10-Vee:
+      path: ./M10-Vee.yaml
+      description: "M10 — Vee (วี) — QA Auditor"
+    M11-Orbit:
+      path: ./M11-Orbit.yaml
+      description: "M11 — Orbit (ออร์บิต) — Planner / Router"
+    M12-Judge:
+      path: ./M12-Judge.yaml
+      description: "M12 — Judge (จัดจ) — Decision & Tradeoff Analyst"
+    M13-Atlas:
+      path: ./M13-Atlas.yaml
+      description: "M13 — Atlas (แอตลาส) — Architecture Lead"
+    M14-Spec:
+      path: ./M14-Spec.yaml
+      description: "M14 — Spec (สเปก) — Requirements Lead"
+    M24-Signal:
+      path: ./M24-Signal.yaml
+      description: "M24 — Signal (ซิกแนล) — Comms Lead"
+    M15-Echo:
+      path: ./M15-Echo.yaml
+      description: "M15 — Echo (เอคโค) — Diff Analyst"
+    M17-Index:
+      path: ./M17-Index.yaml
+      description: "M17 — Index (อินเด็กซ์) — Repo Mapper"
+    M16-Trace:
+      path: ./M16-Trace.yaml
+      description: "M16 — Trace (เทรซ) — Flow Mapper"
+    M18-Forge:
+      path: ./M18-Forge.yaml
+      description: "M18 — Forge (ฟอร์จ) — Refactor Worker"
+    M19-Patch:
+      path: ./M19-Patch.yaml
+      description: "M19 — Patch (แพตช์) — Hotfix Worker"
+    M20-Probe:
+      path: ./M20-Probe.yaml
+      description: "M20 — Probe (โพรบ) — Runtime Verification"
+    M21-Guard:
+      path: ./M21-Guard.yaml
+      description: "M21 — Guard (การ์ด) — Policy Auditor"
+    M22-Doca:
+      path: ./M22-Doca.yaml
+      description: "M22 — Doca (โดกา) — Report Writer"
+    M23-Coder:
+      path: ./M23-Coder.yaml
+      description: "M23 — Coder (โคเดอร์) — General Software Engineering Unit"
+
