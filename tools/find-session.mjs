@@ -3,7 +3,9 @@
  * find-session.mjs — ค้นหาและอ่าน session เก่าจริงจากทุก store (ห้ามเดา)
  *
  * Stores ที่สแกน ( portable ทุกเครื่อง ผูกกับ homedir ):
- *   miru-zero : ~/.miru_zero/sessions/<hash>/<uuid>/context.jsonl
+ *   miru-zero : ~/.miru_zero/sessions/<hash>/<uuid>/context.jsonl (layout เก่า)
+ *             + ~/.miru_zero/sessions/wd_*\/session_*\/ (layout ใหม่ = daimon wire
+ *               state.json มี isCustomTitle, session_index.jsonl → workDir)
  *   kimi-code : ~/.kimi-code/sessions/<hash>/<uuid>/context.jsonl
  *   daimon    : ~/.zero/share/daimon-share/daimon/runtime/kimi-code/home/sessions/wd_*\/<id>/
  *               (state.json + agents/main/wire.jsonl + session_index.jsonl → workDir
@@ -24,6 +26,7 @@ import crypto from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
 const HOME = os.homedir();
+const MIRU_HOME = path.join(HOME, '.miru_zero');
 const DAIMON_HOME = path.join(HOME, '.zero', 'share', 'daimon-share', 'daimon', 'runtime', 'kimi-code', 'home');
 const DAIMON_SQLITE = path.resolve(DAIMON_HOME, '..', '..', '..', 'agents', 'main', 'sessions', 'hosted-logical', 'conversations.sqlite');
 
@@ -33,11 +36,11 @@ function norm(s) {
 }
 
 /** ชื่อห้องสะอาด (ชื่อใน sidebar) จาก hosted-logical sqlite — node:sqlite built-in (node v24) · ล็อก/ไม่รองรับ = คืนแผนที่ว่าง แล้ว fallback ไป title ของ state.json */
-function loadDaimonTitles() {
+function loadSqliteTitles(dbPath) {
   const map = new Map();
-  if (!fs.existsSync(DAIMON_SQLITE)) return map;
+  if (!dbPath || !fs.existsSync(dbPath)) return map;
   try {
-    const db = new DatabaseSync(DAIMON_SQLITE, { readonly: true });
+    const db = new DatabaseSync(dbPath, { readonly: true });
     try {
       const rows = db
         .prepare("SELECT kernel_session_id, title, workspace_path FROM conversations WHERE title IS NOT NULL AND title != ''")
@@ -55,9 +58,11 @@ function loadDaimonTitles() {
 }
 
 const STORES = [
-  { name: 'miru-zero', root: path.join(HOME, '.miru_zero', 'sessions'), kind: 'context' },
+  { name: 'miru-zero', root: path.join(MIRU_HOME, 'sessions'), kind: 'context' },
+  // layout ใหม่ของ miru-zero (IDE ของเรา) = daimon wire — wd_*/session_*/ (scanner ข้าม hash dir เก่าให้เอง ไม่ซ้ำกับ context)
+  { name: 'miru-zero', root: path.join(MIRU_HOME, 'sessions'), kind: 'wire', index: path.join(MIRU_HOME, 'session_index.jsonl'), titlesDb: null },
   { name: 'kimi-code', root: path.join(HOME, '.kimi-code', 'sessions'), kind: 'context' },
-  { name: 'daimon', root: path.join(DAIMON_HOME, 'sessions'), kind: 'wire' },
+  { name: 'daimon', root: path.join(DAIMON_HOME, 'sessions'), kind: 'wire', index: path.join(DAIMON_HOME, 'session_index.jsonl'), titlesDb: DAIMON_SQLITE },
   { name: 'codex', root: path.join(HOME, '.codex', 'sessions'), kind: 'codex' },
 ];
 
@@ -216,12 +221,11 @@ function scanContextStore(store) {
   return out;
 }
 
-function loadDaimonIndex() {
+function loadSessionIndex(indexPath) {
   const idx = new Map();
-  const p = path.join(DAIMON_HOME, 'session_index.jsonl');
-  if (!fs.existsSync(p)) return idx;
+  if (!indexPath || !fs.existsSync(indexPath)) return idx;
   try {
-    for (const line of fs.readFileSync(p, 'utf8').split('\n')) {
+    for (const line of fs.readFileSync(indexPath, 'utf8').split('\n')) {
       if (!line.trim()) continue;
       try {
         const d = JSON.parse(line);
@@ -232,11 +236,12 @@ function loadDaimonIndex() {
   return idx;
 }
 
-function scanDaimonStore(store) {
+function scanWireStore(store) {
   const out = [];
-  const idx = loadDaimonIndex();
-  const titles = loadDaimonTitles(); // ชื่อห้องสะอาดจาก sidebar (sqlite)
+  const idx = loadSessionIndex(store.index);
+  const titles = loadSqliteTitles(store.titlesDb); // ชื่อห้องสะอาดจาก sidebar (sqlite, ถ้า store มี)
   for (const wdDir of walkDirs(store.root, 0)) {
+    if (!path.basename(wdDir).startsWith('wd_')) continue; // wire layout อยู่ใต้ wd_* เท่านั้น — กันกิน hash dir ของ context store ที่ root เดียวกัน (miru-zero)
     for (const sessDir of walkDirs(wdDir, 0)) {
       const id = path.basename(sessDir);
       if (id.startsWith('ctitle-')) continue; // session ภายในสำหรับปั้มชื่อห้อง ไม่ใช่ห้องจริง
@@ -267,9 +272,10 @@ function scanDaimonStore(store) {
         } catch { /* partial ok */ }
       }
       const t = titles.get(id);
+      // title chain: sqlite sidebar → state.title เฉพาะตอนผู้ใช้ตั้งเอง (isCustomTitle) → firstUser (title auto ของ daimon เป็นขยะ raw ห้ามใช้)
       out.push({
         store: store.name, id, dir: sessDir, kind: 'wire',
-        title: t?.title || cleanTitle(st.title) || firstUser || truncate(stripTags(firstUserAny), 90),
+        title: t?.title || (st.isCustomTitle ? cleanTitle(st.title) : '') || firstUser || truncate(stripTags(firstUserAny), 90),
         workDir: t?.workDir || idx.get(id)?.workDir || '',
         mtime: Date.parse(st.updatedAt || '') || 0,
         msgCount,
@@ -369,7 +375,7 @@ export function listSessions({ limit = 20, store = null, dedupe = true } = {}) {
   for (const s of STORES) {
     if (store && s.name !== store) continue;
     if (!fs.existsSync(s.root)) continue;
-    all = all.concat(s.kind === 'context' ? scanContextStore(s) : s.kind === 'wire' ? scanDaimonStore(s) : scanCodexStore(s));
+    all = all.concat(s.kind === 'context' ? scanContextStore(s) : s.kind === 'wire' ? scanWireStore(s) : scanCodexStore(s));
   }
   all.sort((a, b) => b.mtime - a.mtime);
   if (dedupe) {
