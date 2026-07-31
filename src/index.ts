@@ -30,6 +30,11 @@
  * v2.6.0 — episodes: zero_episode จด task/method/outcome/evidence ตอนจบงาน
  * runtime (codex/kimi-code/daimon/…) stamp อัตโนมัติจาก MCP clientInfo ไม่ฟิก kimi —
  * zero_episodes อ่าน log / zero_match ค้น 3 แหล่ง (episodes→sessions→notes)
+ *
+ * v2.7.0 — find-session match ชื่อห้อง: อ่านชื่อสะอาดจาก sidebar sqlite
+ * (hosted-logical/conversations.sqlite) + normalize ตัวแยก _-/\.: ("session boot"
+ * เจอ "SESSION_BOOT") / install.sh portable Linux-macOS-cloud / swarm casting
+ * protocol cast ทีม zero M01-M24 / component layer (roster+skills) แป๊ะขึ้น repo
  */
 
 import { execSync } from "node:child_process";
@@ -1431,7 +1436,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.6.0" },
+  { name: "zero-brain-mcp-server", version: "2.7.0" },
   { capabilities: { tools: {} } },
 );
 
