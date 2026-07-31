@@ -191,7 +191,8 @@ function mcpProbe() {
           const names = (msg.result?.tools ?? []).map((t) => t.name);
           const need = ["zero_init", "zero_capture", "zero_write_note", "zero_read", "zero_search",
             "zero_link", "zero_resolve", "zero_health", "zero_home", "zero_nightly", "zero_audit",
-            "zero_list_packs", "zero_update_note", "zero_compact", "zero_upgrade"];
+            "zero_list_packs", "zero_update_note", "zero_compact", "zero_upgrade",
+            "zero_find_session", "zero_read_session"];
           const missing = need.filter((n) => !names.includes(n));
           if (missing.length > 0) {
             clearTimeout(timer);
@@ -223,7 +224,7 @@ function mcpProbe() {
 
 const probe = await mcpProbe();
 check("MCP initialize ตอบ", probe.okCount >= 1, probe.failName);
-check("tools/list ครบ 15 tools (รวม zero_compact/zero_upgrade)", probe.okCount >= 2, probe.failName + " " + (probe.extra ?? ""));
+check("tools/list ครบ 17 tools (รวม session finder)", probe.okCount >= 2, probe.failName + " " + (probe.extra ?? ""));
 check("zero_health วิ่งจริงคืน ok", probe.okCount >= 3, probe.failName + " " + (probe.extra ?? ""));
 
 console.log(`\nผลลัพธ์: PASS ${passed} / FAIL ${failed} / SKIP ${skipped}`);

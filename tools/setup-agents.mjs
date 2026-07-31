@@ -46,6 +46,7 @@ const BLOCK = `
 - ก่อนแก้/ลบไฟล์: สำเนาต้นฉบับเข้า backup_edit (\`node ~/.zero/mcp/zero-brain/tools/backup-edit.mjs <file>\`) · ไฟล์รัน/log ใส่ \`<project>/.zero/\` ห้ามรกโปรเจ็ค · ทำงานโปรเจ็ค: อ่าน \`<project>/.zero/ZERO.md\` ก่อน (มีให้ยึด ไม่ใช่สั่งรอบเดียวจบ) · โน้ตใหม่ห้ามลอย — links เข้า MOC/Scope ≥1 เส้น
 - กฎสัญญาเต็ม: อ่าน \`~/.zero/brain/AGENTS.md\` ก่อนใช้สมองทุกครั้ง
 - งบโทเค้น: STOP → THINK → RUN ONCE · ห้าม poll loop · instrument ก่อนรันใหญ่ — เต็มที่ \`~/.zero/brain/20_Atlas/Token Budget Policy.md\`
+- งานที่แตะระบบ zero/สมอง (boot, sync, skill, MCP, vault): invoke skill \`zero\` ผ่าน Skill tool ก่อนตอบ — ไม่มีใน skills index = session เก่าก่อนติดตั้ง บอกป๊าเปิด session ใหม่ (index สร้างตอน session เริ่ม/compact)
 <!-- ZERO:END -->`;
 
 function ensureBlock(file, client, label = "AGENTS.md") {

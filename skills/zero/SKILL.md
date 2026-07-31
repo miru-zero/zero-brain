@@ -1,11 +1,12 @@
 ---
 name: zero
 description: >
-  Use when the user types /zero or asks to boot, check, health-check, or install
-  the Zero system — e.g. "/zero", "เปิด zero", "เช็คระบบ zero", "zero status",
-  "ติดตั้ง zero", "zero ไม่ทำงาน". Covers the ~/.zero zone: brain vault,
-  zero-brain MCP (zero_* tools), and daimon skills. Also use when an AI receives
-  this SKILL.md as an install package for a fresh machine.
+  Auto-activate when the user types /zero or asks about the Zero system — boot,
+  health-check, sync, install, or troubleshoot — e.g. "/zero", "เปิด zero",
+  "เช็คระบบ zero", "zero status", "ติดตั้ง zero", "zero ไม่ทำงาน", "ซิงก์สมอง",
+  "อัปเดตสมอง", "zero-brain", "สกิลของ zero". Covers the ~/.zero zone: brain
+  vault, zero-brain MCP (zero_* tools), and daimon skills. Also use when an AI
+  receives this SKILL.md as an install package for a fresh machine.
 ---
 
 # ⭕ ZERO — Boot / Health / Install ของระบบ Zero
@@ -23,6 +24,8 @@ description: >
 | `~/.zero/share/` | ส่วนทำงาน daimon (sessions, skills, runtime) — ไม่ใช่สมอง | ห้ามนับเป็นความจำ |
 
 ## Boot Check (รันเมื่อถูกเรียก)
+
+> **Skills index lifecycle**: index สร้างตอน session เริ่ม (และ rebuild ตอน compact) — skill ที่ลงกลาง session จะ **ไม่เข้า index ทันที** · ถ้าป๊าพิมพ์ /zero แล้วไม่ทริกเกอร์ ให้เช็คว่า session นี้เก่ากว่าตอนติดตั้งไหม → ทางแก้: เปิด session ใหม่ (หรือรอ compact)
 
 1. **เช็ค MCP ก่อนเลย** — ถ้า session นี้ไม่มี tools `zero_*` แปลว่า client ยังไม่ได้ต่อ zero-brain → รัน `node ~/.zero/mcp/zero-brain/tools/setup-agents.mjs` แล้วบอกป๊า restart client · **ห้าม sync/แก้ brain ด้วย file tools แทนเด็ดขาด**
 2. `~/.zero/brain/` มี `AGENTS.md` + `manifest.jsonl` → อ่าน `AGENTS.md` ก่อนเสมอ (สัญญามนุษย์-agent)
