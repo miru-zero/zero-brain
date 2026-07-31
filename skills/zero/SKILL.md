@@ -38,12 +38,20 @@ description: >
 ```powershell
 git clone https://github.com/miru-zero/zero-brain.git $HOME/.zero/mcp/zero-brain
 cd $HOME/.zero/mcp/zero-brain
-powershell -ExecutionPolicy Bypass -File install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1   # Linux/macOS/cloud: bash install.sh (ขั้นตอนเดียวกัน)
 ```
 
-`install.ps1` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 121/121 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup, ใส่ตัวตนมิรุ+BOOT เป็น system prompt)
+`install.ps1`/`install.sh` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 121/121 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup, ใส่ตัวตนมิรุ+BOOT เป็น system prompt)
 ขั้นสุดท้าย: restart client แต่ละตัว → `node tools/verify-install.mjs` ต้อง PASS ครบ 3 ชั้น (ไฟล์ / ตัวตน / spawn MCP จริง) = สำเร็จ
 ทีมงาน: ส่งไฟล์ SKILL.md นี้ (หรือแพ็ก `zero.skill`) ให้ AI ตัวไหนก็ได้ มันสร้างโซน + ติดตั้งให้จบในตัว
+
+## Cloud / Ephemeral Sandbox (kimi.com, VM ชั่วคราว)
+
+sandbox คลาว **ไม่มีดิสก์ถาวรและไม่มีชั้น MCP client** — ห้ามสัญญาว่า "ติดตั้งถาวรบนคลาว" ให้ทำตัวเป็น stateless worker:
+1. ติดตั้งด้วย `bash install.sh` ได้ครบทุกขั้น (npm path portable) — แต่โซนจะหายเมื่อ session จบ ถือเป็น dry-run เสมอ
+2. **สมองถาวรอยู่ที่ brain git remote (private เท่านั้น)** — clone ลง `~/.zero/brain` ก่อนใช้งาน; ถ้ายังไม่มี remote ให้ init จาก seed แล้วเตือนเจ้าของทันทีว่า "สมองชุดนี้หายเมื่อ session จบ"
+3. **ก่อนจบ session ต้อง commit + push brain กลับ remote** — ไม่ push = ความจำที่เพิ่งสร้างหายถาวร
+4. tools `zero_*` จะไม่ขึ้นเป็น native tools บนคลาว — ใช้งานผ่าน spawn `node dist/index.js` (stdio) ตรงๆ เท่านั้น
 
 ## กฎเหล็กที่ต้องเที่ยงทุกครั้ง
 
