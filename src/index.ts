@@ -22,6 +22,10 @@
  * v2.4.0 — session finder: zero_find_session/zero_read_session ค้น+อ่าน session เก่าจริง
  * จากทุก store (miru-zero/kimi-code/daimon ผ่าน tools/find-session.mjs) — ตอบโจทย์
  * "ต่องานจากห้องนั้น/ssid เดิม" โดยไม่เดา / read-only ไม่แตะ brain
+ *
+ * v2.5.0 — zero_match: "เคยทำเรื่องนี้ไหม วิธีไหน ได้ผลไหม" — จับกลุ่มห้อง fork
+ * ด้วย hash ของ user texts ช่วงหัว (แสดง 1 อ้างอิง N uuid + tools + outcome hint)
+ * + ค้นโน้ตสมองในคำสั่งเดียว (episodic layer แรกของสมอง)
  */
 
 import { execSync } from "node:child_process";
@@ -1002,6 +1006,7 @@ function handleAudit(args: Record<string, unknown>): unknown {
 type FindSessionModule = {
   listSessions: (opts?: { limit?: number; store?: string | null }) => unknown[];
   findSessions: (query: string, opts?: { limit?: number; content?: boolean }) => unknown[];
+  matchSessions: (query: string, opts?: { limit?: number }) => unknown[];
   readSession: (id: string, opts?: { limit?: number; full?: boolean; archives?: boolean }) => unknown;
 };
 
@@ -1045,6 +1050,31 @@ async function handleReadSession(args: Record<string, unknown>): Promise<unknown
     );
   }
   return { ok: true, ...result };
+}
+
+/**
+ * zero_match — "เคยทำเรื่องนี้ไหม วิธีไหน ได้ผล/ไม่ได้ผล"
+ * ค้น 2 แหล่งพร้อมกัน: (1) session เก่าทุก store จับกลุ่มห้อง fork (แสดง 1 อ้างอิง N uuid)
+ * (2) โน้ตในสมอง (zero_search) — คืนสองส่วน sessions + notes
+ */
+async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  if (!query) throw new Error("ต้องระบุ query (เรื่องที่จะทำ)");
+  const limit = clampInt(args.limit, 10) || 10;
+  const fsm = await loadFindSession();
+  const sessions = fsm.matchSessions(query, { limit });
+  const notes = handleSearch({ query, limit }) as { count?: number; results?: unknown[] };
+  return {
+    ok: true,
+    query,
+    sessions_count: sessions.length,
+    sessions,
+    notes_count: notes.count ?? 0,
+    notes: notes.results ?? [],
+    hint: sessions.length > 0
+      ? "เคยมีร่องรอยเรื่องนี้ — ดู refs (uuid) + tools ที่เคยใช้ + outcome_hint ก่อนลงมือ; ถ้าจะลองวิธีใหม่ให้บอกป๊าว่ารอบก่อนใช้วิธีไหน"
+      : "ไม่เจอร่องรอยใน session เก่า — ดู notes อย่างเดียว หรือถือว่าเรื่องใหม่",
+  };
 }
 
 // ---------- tool schemas ----------
@@ -1256,6 +1286,20 @@ const TOOLS = [
       additionalProperties: false,
     },
   },
+  {
+    name: "zero_match",
+    description:
+      "'เคยทำเรื่องนี้ไหม วิธีไหน ได้ผล/ไม่ได้ผล' — ค้น session เก่าทุก store แบบจับกลุ่มห้อง fork (แสดง 1 รายการ อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint) พร้อมค้นโน้ตสมองในคำสั่งเดียว เรียกก่อนลงมืองานที่อาจเคยทำ ห้ามเดา",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "เรื่องที่กำลังจะทำ เช่น 'bypass vguard', 'deploy เว็บ'" },
+        limit: { type: "number" },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 // ---------- server ----------
@@ -1288,6 +1332,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "zero_upgrade": return ok(handleUpgrade());
       case "zero_find_session": return ok(await handleFindSession(args));
       case "zero_read_session": return ok(await handleReadSession(args));
+      case "zero_match": return ok(await handleMatch(args));
       default: return fail(`ไม่รู้จัก tool: ${name} (v2.0.0 เปลี่ยนชื่อเป็น zero_* แล้ว)`);
     }
   } catch (err) {

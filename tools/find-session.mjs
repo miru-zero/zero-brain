@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
+import crypto from 'node:crypto';
 
 const HOME = os.homedir();
 const DAIMON_HOME = path.join(HOME, '.zero', 'share', 'daimon-share', 'daimon', 'runtime', 'kimi-code', 'home');
@@ -235,6 +236,90 @@ export function findSessions(query, { limit = 20, content = false } = {}) {
   return hits.slice(0, limit);
 }
 
+// ---------- match: "เคยทำเรื่องนี้ไหม วิธีไหน ได้ผลไหม" ----------
+
+/**
+ * อ่าน session 1 ครั้ง → { forkKey, lastText, tools }
+ * forkKey = hash ของ user texts ช่วงหัว (1200 ตัวแรก) — ห้อง fork/ลองซ้ำ share prefix เดียวกัน
+ * (heuristic ไม่ใช่หลักฐาน fork 100%: ห้องที่ diverge เร็วมากอาจหลุดกลุ่ม ห้องที่เหมือนกันยาวอาจรวมกัน)
+ */
+function enrichSession(sess) {
+  const f = sess.kind === 'context'
+    ? path.join(sess.dir, 'context.jsonl')
+    : path.join(sess.dir, 'agents', 'main', 'wire.jsonl');
+  const userTexts = [], userTextsNonSystem = [];
+  const tools = new Set();
+  let lastText = '', lastTextAny = '';
+  if (fs.existsSync(f)) {
+    try {
+      for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+        if (!line.trim()) continue;
+        let d; try { d = JSON.parse(line); } catch { continue; }
+        let role, content, toolCalls;
+        if (sess.kind === 'context') {
+          role = d.role; content = d.content; toolCalls = d.tool_calls;
+        } else {
+          if (d.type !== 'context.append_message' || !d.message) continue;
+          role = d.message.role; content = d.message.content;
+        }
+        if (role === 'user') {
+          const { text } = extractContent(content);
+          if (text) {
+            userTexts.push(stripTags(text));
+            if (!isSystemish(text)) userTextsNonSystem.push(stripTags(text));
+          }
+        }
+        if (Array.isArray(toolCalls)) {
+          for (const t of toolCalls) {
+            const n = t?.function?.name ?? t?.name;
+            if (n) tools.add(n);
+          }
+        }
+        if (role === 'user' || role === 'assistant' || role === 'tool') {
+          const { text } = extractContent(content);
+          if (text) {
+            lastTextAny = truncate(stripTags(text), 150);
+            if (!isSystemish(text)) lastText = lastTextAny;
+          }
+        }
+      }
+    } catch { /* partial ok */ }
+  }
+  const joined = (userTextsNonSystem.length ? userTextsNonSystem : userTexts).join('\n');
+  const forkKey = crypto.createHash('sha1').update(joined.slice(0, 1200)).digest('hex').slice(0, 10);
+  return { forkKey, lastText: lastText || lastTextAny, tools: [...tools] };
+}
+
+/**
+ * matchSessions(query) — ค้นเนื้อแชททุก session แล้วจับกลุ่มห้อง fork/ลองซ้ำ:
+ * แสดง 1 รายการต่อกลุ่ม อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint (ข้อความสุดท้ายของห้องใหม่สุด)
+ */
+export function matchSessions(query, { limit = 20 } = {}) {
+  const q = String(query || '').toLowerCase();
+  if (!q) return [];
+  const groups = new Map();
+  for (const s of listSessions({ limit: 100000 })) {
+    const snippet = grepSessionContent(s, q);
+    if (snippet == null) continue;
+    const e = enrichSession(s);
+    let g = groups.get(e.forkKey);
+    if (!g) {
+      g = { key: e.forkKey, refs: [], count: 0, title: '', snippet, outcome_hint: '', tools: new Set(), mtime: 0 };
+      groups.set(e.forkKey, g);
+    }
+    g.count += 1;
+    g.refs.push({ store: s.store, id: s.id, ...(s.alsoIn?.length ? { alsoIn: s.alsoIn } : {}) });
+    for (const t of e.tools) g.tools.add(t);
+    if (s.mtime >= g.mtime) {
+      g.mtime = s.mtime; g.title = s.title; g.snippet = snippet; g.outcome_hint = e.lastText;
+    }
+  }
+  return [...groups.values()]
+    .map((g) => ({ ...g, tools: [...g.tools] }))
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, limit);
+}
+
 function resolveSession(idOrPrefix) {
   const q = String(idOrPrefix).toLowerCase();
   const hits = listSessions({ limit: 100000 }).filter((s) => s.id.toLowerCase() === q || s.id.toLowerCase().startsWith(q));
@@ -335,6 +420,20 @@ async function main() {
     const q = args.find((a) => !a.startsWith('--'));
     if (!q) { console.error('ใส่คำค้น: find <query>'); process.exit(2); }
     printList(findSessions(q, { limit, content: args.includes('--content') }), json);
+  } else if (cmd === 'match') {
+    const q = args.find((a) => !a.startsWith('--'));
+    if (!q) { console.error('ใส่คำค้น: match <query>'); process.exit(2); }
+    const groups = matchSessions(q, { limit });
+    if (json) return console.log(JSON.stringify(groups, null, 2));
+    for (const g of groups) {
+      const t = new Date(g.mtime).toISOString().slice(0, 16).replace('T', ' ');
+      console.log(`● ${g.count > 1 ? `fork ${g.count} ห้อง` : '1 ห้อง'}  ${t}  ${truncate(g.title || '(no title)', 80)}`);
+      console.log(`  refs: ${g.refs.map((r) => `${r.id.slice(0, 8)}…(${r.store}${r.alsoIn ? '+' + r.alsoIn.length : ''})`).join(', ')}`);
+      if (g.tools.length) console.log(`  tools เคยใช้: ${g.tools.join(', ')}`);
+      if (g.outcome_hint) console.log(`  outcome hint: ${g.outcome_hint}`);
+      console.log(`  ⌕ …${g.snippet}…`);
+    }
+    console.log(`— ${groups.length} กลุ่ม`);
   } else if (cmd === 'read') {
     const id = args.find((a) => !a.startsWith('--') && a !== argValue(args, '--limit', null));
     if (!id) { console.error('ใส่ id: read <id|prefix>'); process.exit(2); }
@@ -353,6 +452,7 @@ async function main() {
     console.log(`find-session — ค้น+อ่าน session เก่าจริง
   list [--limit N] [--store miru-zero|kimi-code|daimon] [--json]
   find <query> [--content] [--limit N] [--json]   ค้น id/title/workDir (+เนื้อแชทถ้า --content)
+  match <query> [--limit N] [--json]              "เคยทำไหม วิธีไหน ผลไง" — จับกลุ่มห้อง fork แสดง 1 อ้างอิง N uuid
   read <id|prefix> [--limit N] [--full] [--archives] [--json]`);
     process.exit(cmd ? 2 : 0);
   }
