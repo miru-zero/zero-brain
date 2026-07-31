@@ -18,12 +18,16 @@
  * v2.3.1 — Obsidian-visible links block: กราฟ OB วาดเส้นจาก [[wikilinks]] ใน body เท่านั้น
  * ทุก write/update/link regenerate block ท้าย body จาก meta.links (wikilink = stem ไฟล์) /
  * write เตือน "ลอย" เมื่อไม่มี links / backup-edit --init-workspace สร้าง .zero/ZERO.md anchor
+ *
+ * v2.4.0 — session finder: zero_find_session/zero_read_session ค้น+อ่าน session เก่าจริง
+ * จากทุก store (miru-zero/kimi-code/daimon ผ่าน tools/find-session.mjs) — ตอบโจทย์
+ * "ต่องานจากห้องนั้น/ssid เดิม" โดยไม่เดา / read-only ไม่แตะ brain
  */
 
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -993,6 +997,56 @@ function handleAudit(args: Record<string, unknown>): unknown {
   return { ok: true, count: Math.min(limit, all.length), entries: all.slice(-limit) };
 }
 
+// ---------- session finder (read-only — สแกน session store ของ agent ไม่แตะ brain) ----------
+
+type FindSessionModule = {
+  listSessions: (opts?: { limit?: number; store?: string | null }) => unknown[];
+  findSessions: (query: string, opts?: { limit?: number; content?: boolean }) => unknown[];
+  readSession: (id: string, opts?: { limit?: number; full?: boolean; archives?: boolean }) => unknown;
+};
+
+let findSessionModule: FindSessionModule | null = null;
+
+async function loadFindSession(): Promise<FindSessionModule> {
+  if (!findSessionModule) {
+    const repoDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+    findSessionModule = (await import(
+      pathToFileURL(path.join(repoDir, "tools", "find-session.mjs")).href
+    )) as FindSessionModule;
+  }
+  return findSessionModule;
+}
+
+async function handleFindSession(args: Record<string, unknown>): Promise<unknown> {
+  const fsm = await loadFindSession();
+  const limit = clampInt(args.limit, 20) || 20;
+  const query = typeof args.query === "string" ? args.query.trim() : "";
+  if (query) {
+    const hits = fsm.findSessions(query, { limit, content: args.content === true });
+    return { ok: true, count: hits.length, sessions: hits };
+  }
+  const store = typeof args.store === "string" ? args.store : null;
+  const all = fsm.listSessions({ limit, store });
+  return { ok: true, count: all.length, sessions: all };
+}
+
+async function handleReadSession(args: Record<string, unknown>): Promise<unknown> {
+  const id = typeof args.id === "string" ? args.id.trim() : "";
+  if (!id) throw new Error("ต้องระบุ id (เต็มหรือ prefix)");
+  const fsm = await loadFindSession();
+  const limit = clampInt(args.limit, 20) || 20;
+  const result = fsm.readSession(id, { limit, full: args.full === true, archives: args.archives === true }) as {
+    error?: string;
+    candidates?: unknown[];
+  };
+  if (result.error) {
+    throw new Error(
+      result.error + (result.candidates ? ` — candidates: ${JSON.stringify(result.candidates)}` : ""),
+    );
+  }
+  return { ok: true, ...result };
+}
+
 // ---------- tool schemas ----------
 
 const TOOLS = [
@@ -1171,6 +1225,37 @@ const TOOLS = [
     description: "เติมไฟล์ seed/ ที่ยังไม่มีลง brain (ห้ามทับของที่แก้แล้ว) — ใช้หลังอัปเกรด repo แล้ว seed มีไฟล์ใหม่",
     inputSchema: { type: "object", properties: {}, additionalProperties: false },
   },
+  {
+    name: "zero_find_session",
+    description:
+      "ค้น session เก่าจริงจากทุก store (miru-zero/kimi-code/daimon) — ไม่ส่ง query = list ล่าสุด, ส่ง query = ค้น id/title/workDir (content=true ค้นในเนื้อแชทด้วย) ใช้เมื่อป๊าบอก 'ต่องานจากห้องนั้น/ส่งต่อจาก ssid เดิม' ห้ามเดา",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "คำค้น (id/title/workDir/เนื้อแชท) — เว้นว่างเพื่อ list ล่าสุด" },
+        content: { type: "boolean", description: "grep ในเนื้อแชทจริงด้วย (ช้ากว่าเล็กน้อย)" },
+        store: { type: "string", description: "จำกัด store: miru-zero | kimi-code | daimon" },
+        limit: { type: "number" },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "zero_read_session",
+    description:
+      "อ่านข้อความจริงใน session (role ต่อ role พร้อม dir ต้นทาง) — id จาก zero_find_session; prefix ได้ถ้า unique; full=true เอา system/think ครบ, archives=true รวม context ก่อน compact",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "session id เต็มหรือ prefix" },
+        limit: { type: "number" },
+        full: { type: "boolean" },
+        archives: { type: "boolean" },
+      },
+      required: ["id"],
+      additionalProperties: false,
+    },
+  },
 ] as const;
 
 // ---------- server ----------
@@ -1182,7 +1267,7 @@ const server = new Server(
 
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
 
-server.setRequestHandler(CallToolRequestSchema, (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args = {} } = request.params;
   try {
     switch (name) {
@@ -1201,6 +1286,8 @@ server.setRequestHandler(CallToolRequestSchema, (request) => {
       case "zero_audit": return ok(handleAudit(args));
       case "zero_compact": return ok(handleCompact());
       case "zero_upgrade": return ok(handleUpgrade());
+      case "zero_find_session": return ok(await handleFindSession(args));
+      case "zero_read_session": return ok(await handleReadSession(args));
       default: return fail(`ไม่รู้จัก tool: ${name} (v2.0.0 เปลี่ยนชื่อเป็น zero_* แล้ว)`);
     }
   } catch (err) {
