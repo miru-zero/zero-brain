@@ -26,6 +26,10 @@
  * v2.5.0 — zero_match: "เคยทำเรื่องนี้ไหม วิธีไหน ได้ผลไหม" — จับกลุ่มห้อง fork
  * ด้วย hash ของ user texts ช่วงหัว (แสดง 1 อ้างอิง N uuid + tools + outcome hint)
  * + ค้นโน้ตสมองในคำสั่งเดียว (episodic layer แรกของสมอง)
+ *
+ * v2.6.0 — episodes: zero_episode จด task/method/outcome/evidence ตอนจบงาน
+ * runtime (codex/kimi-code/daimon/…) stamp อัตโนมัติจาก MCP clientInfo ไม่ฟิก kimi —
+ * zero_episodes อ่าน log / zero_match ค้น 3 แหล่ง (episodes→sessions→notes)
  */
 
 import { execSync } from "node:child_process";
@@ -65,14 +69,17 @@ import {
   kbPath,
   readAliases,
   readAudit,
+  readEpisodes,
   readLinks,
   readManifest,
+  appendEpisode,
   sha256,
   upgradeSeed,
   upsertManifest,
   withLock,
   writeAliases,
   writeHealth,
+  type EpisodeRecord,
   type HealthReport,
   type ManifestRecord,
 } from "./kernel.js";
@@ -1061,20 +1068,104 @@ async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   if (!query) throw new Error("ต้องระบุ query (เรื่องที่จะทำ)");
   const limit = clampInt(args.limit, 10) || 10;
+  // แหล่ง 1: episodes — agent เคยจดไว้เองพร้อม outcome+runtime (แม่นสุด ไม่ต้องอนุมาน)
+  const q = query.toLowerCase();
+  const episodes = readEpisodes(ROOT)
+    .filter((e) => `${e.task} ${e.method} ${e.note ?? ""} ${e.ssid ?? ""} ${e.workspace ?? ""}`.toLowerCase().includes(q))
+    .slice(-limit);
+  const failEps = episodes.filter((e) => e.outcome === "fail");
+  // แหล่ง 2: session เก่าทุก store (จับกลุ่มห้อง fork) — แหล่ง 3: โน้ตสมอง
   const fsm = await loadFindSession();
   const sessions = fsm.matchSessions(query, { limit });
   const notes = handleSearch({ query, limit }) as { count?: number; results?: unknown[] };
   return {
     ok: true,
     query,
+    episodes_count: episodes.length,
+    episodes,
     sessions_count: sessions.length,
     sessions,
     notes_count: notes.count ?? 0,
     notes: notes.results ?? [],
-    hint: sessions.length > 0
-      ? "เคยมีร่องรอยเรื่องนี้ — ดู refs (uuid) + tools ที่เคยใช้ + outcome_hint ก่อนลงมือ; ถ้าจะลองวิธีใหม่ให้บอกป๊าว่ารอบก่อนใช้วิธีไหน"
-      : "ไม่เจอร่องรอยใน session เก่า — ดู notes อย่างเดียว หรือถือว่าเรื่องใหม่",
+    hint:
+      failEps.length > 0
+        ? `⚠️ เคยลองเรื่องนี้แล้วไม่สำเร็จ ${failEps.length} ครั้ง (ดู episodes: method ไหน จาก runtime ไหน) — อย่าทำวิธีเดิมซ้ำ; ถ้าป๊าสั่งลองใหม่ ให้บอกว่ารอบนี้เปลี่ยนอะไร`
+        : episodes.length > 0
+          ? "เคยทำเรื่องนี้แล้วและจดผลไว้ (ดู episodes) — อ้างอิง method/evidence ได้เลย"
+          : sessions.length > 0
+            ? "ไม่มี episode ที่จดไว้ แต่เจอร่องรอยใน session เก่า — ดู refs (uuid) + tools + outcome_hint ก่อนลงมือ"
+            : "ไม่เจอร่องรอยทั้ง episodes/session — ดู notes อย่างเดียว หรือถือว่าเรื่องใหม่",
   };
+}
+
+// ---------- episodes (v2.6.0): จด "ทำอะไร วิธีไหน ได้ผลไหม" พร้อม runtime อัตโนมัติ ----------
+
+/** runtime ของ client ที่ต่อ MCP อยู่ — จาก initialize handshake (clientInfo) ไม่ใช่การเดา */
+function currentRuntime(): string {
+  try {
+    return server.getClientVersion()?.name ?? "unknown";
+  } catch {
+    return "unknown";
+  }
+}
+
+const EPISODE_OUTCOMES = new Set(["pass", "fail", "partial"]);
+
+function clampText(v: unknown, max: number): string | undefined {
+  return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : undefined;
+}
+
+function handleEpisode(args: Record<string, unknown>): unknown {
+  ensureBrain();
+  const task = clampText(args.task, 500);
+  const method = clampText(args.method, 500);
+  const evidence = clampText(args.evidence, 500);
+  const outcome = typeof args.outcome === "string" ? args.outcome.toLowerCase() : "";
+  if (!task) throw new Error("ต้องระบุ task (ทำอะไร)");
+  if (!method) throw new Error("ต้องระบุ method (วิธี/เครื่องมือหลักที่ใช้)");
+  if (!EPISODE_OUTCOMES.has(outcome)) throw new Error("outcome ต้องเป็น pass | fail | partial");
+  if (!evidence) throw new Error("ต้องมี evidence (หลักฐานผลลัพธ์) — กฎสมอง: ห้ามเคลมไร้หลักฐาน");
+  const ssid = clampText(args.ssid, 100);
+  const workspace = clampText(args.workspace, 300);
+  const note = clampText(args.note, 500);
+  const record: EpisodeRecord = {
+    id: genId(),
+    ts: new Date().toISOString(),
+    runtime: clampText(args.runtime, 100) ?? currentRuntime(),
+    actor: ACTOR,
+    task,
+    method,
+    outcome: outcome as EpisodeRecord["outcome"],
+    evidence,
+    ...(ssid ? { ssid } : {}),
+    ...(workspace ? { workspace } : {}),
+    ...(note ? { note } : {}),
+  };
+  return withLock(ROOT, () => {
+    appendEpisode(ROOT, record);
+    audit(
+      ROOT,
+      ACTOR,
+      "brain_episode",
+      ".kb/episodes.jsonl",
+      `outcome=${record.outcome} runtime=${record.runtime} task=${record.task.slice(0, 80)}`,
+    );
+    return { ok: true, episode: record };
+  });
+}
+
+function handleEpisodes(args: Record<string, unknown>): unknown {
+  ensureBrain();
+  const limit = clampInt(args.limit, 20) || 20;
+  const outcome = clampText(args.outcome, 20)?.toLowerCase();
+  const runtime = clampText(args.runtime, 100)?.toLowerCase();
+  const query = clampText(args.query, 200)?.toLowerCase();
+  let all = readEpisodes(ROOT);
+  if (outcome) all = all.filter((e) => e.outcome === outcome);
+  if (runtime) all = all.filter((e) => e.runtime.toLowerCase() === runtime);
+  if (query) all = all.filter((e) => `${e.task} ${e.method} ${e.note ?? ""}`.toLowerCase().includes(query));
+  const tail = all.slice(-limit);
+  return { ok: true, count: tail.length, total: all.length, episodes: tail };
 }
 
 // ---------- tool schemas ----------
@@ -1289,7 +1380,7 @@ const TOOLS = [
   {
     name: "zero_match",
     description:
-      "'เคยทำเรื่องนี้ไหม วิธีไหน ได้ผล/ไม่ได้ผล' — ค้น session เก่าทุก store แบบจับกลุ่มห้อง fork (แสดง 1 รายการ อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint) พร้อมค้นโน้ตสมองในคำสั่งเดียว เรียกก่อนลงมืองานที่อาจเคยทำ ห้ามเดา",
+      "'เคยทำเรื่องนี้ไหม วิธีไหน ได้ผล/ไม่ได้ผล' — ค้น 3 แหล่งในคำสั่งเดียว: episodes ที่เคยจด (outcome+runtime ชัด) / session เก่าทุก store จับกลุ่มห้อง fork (แสดง 1 อ้างอิง N uuid) / โน้ตสมอง เรียกก่อนลงมืองานที่อาจเคยทำ ห้ามเดา",
     inputSchema: {
       type: "object",
       properties: {
@@ -1297,6 +1388,41 @@ const TOOLS = [
         limit: { type: "number" },
       },
       required: ["query"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "zero_episode",
+    description:
+      "จด episode ตอนจบงาน: task (ทำอะไร) + method (วิธี) + outcome (pass|fail|partial) + evidence (หลักฐาน บังคับตามกฎสมอง) + ssid/workspace/note — runtime (codex/kimi-code/daimon/…) stamp อัตโนมัติจาก MCP clientInfo ห้ามใส่ secret เรียกทุกครั้งที่จบงานหรือ session โดนตัด",
+    inputSchema: {
+      type: "object",
+      properties: {
+        task: { type: "string", description: "ทำอะไร (สั้น)" },
+        method: { type: "string", description: "วิธี/เครื่องมือหลักที่ใช้" },
+        outcome: { type: "string", enum: ["pass", "fail", "partial"] },
+        evidence: { type: "string", description: "หลักฐานผลลัพธ์ (test output/error/path) — บังคับ" },
+        ssid: { type: "string", description: "session id ถ้ารู้" },
+        workspace: { type: "string", description: "โปรเจ็ค/ไดเรกทอรี" },
+        note: { type: "string", description: "บทเรียน/เหตุที่ fail" },
+        runtime: { type: "string", description: "override runtime (ปกติไม่ต้องส่ง — stamp จาก clientInfo)" },
+      },
+      required: ["task", "method", "outcome", "evidence"],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: "zero_episodes",
+    description:
+      "อ่าน log episodes (อ้างอิงตอนค้นหา/ทบทวน) — filter ได้ด้วย outcome (pass|fail|partial) / runtime (codex/kimi-code/daimon/…) / query",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number" },
+        outcome: { type: "string", enum: ["pass", "fail", "partial"] },
+        runtime: { type: "string" },
+        query: { type: "string" },
+      },
       additionalProperties: false,
     },
   },
@@ -1333,6 +1459,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case "zero_find_session": return ok(await handleFindSession(args));
       case "zero_read_session": return ok(await handleReadSession(args));
       case "zero_match": return ok(await handleMatch(args));
+      case "zero_episode": return ok(handleEpisode(args));
+      case "zero_episodes": return ok(handleEpisodes(args));
       default: return fail(`ไม่รู้จัก tool: ${name} (v2.0.0 เปลี่ยนชื่อเป็น zero_* แล้ว)`);
     }
   } catch (err) {

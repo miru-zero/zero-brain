@@ -27,6 +27,7 @@ const STORES = [
   { name: 'miru-zero', root: path.join(HOME, '.miru_zero', 'sessions'), kind: 'context' },
   { name: 'kimi-code', root: path.join(HOME, '.kimi-code', 'sessions'), kind: 'context' },
   { name: 'daimon', root: path.join(DAIMON_HOME, 'sessions'), kind: 'wire' },
+  { name: 'codex', root: path.join(HOME, '.codex', 'sessions'), kind: 'codex' },
 ];
 
 // ---------- helpers ----------
@@ -54,7 +55,8 @@ function extractContent(content) {
     const texts = [], thinks = [];
     for (const b of content) {
       if (!b || typeof b !== 'object') continue;
-      if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text);
+      // text (kimi/miru) + input_text/output_text (codex rollout)
+      if ((b.type === 'text' || b.type === 'input_text' || b.type === 'output_text') && typeof b.text === 'string') texts.push(b.text);
       else if (b.type === 'think' && typeof b.think === 'string') thinks.push(b.think);
     }
     return { text: texts.join('\n'), think: thinks.join('\n') };
@@ -62,7 +64,62 @@ function extractContent(content) {
   return { text: String(content), think: '' };
 }
 
-const isSystemish = (t) => /^<(system|system-reminder|meta|attachment)\b/i.test(t.trim());
+const isSystemish = (t) =>
+  /^<(system|system-reminder|meta|attachment)\b/i.test(t.trim()) ||
+  // blob ที่ runtime ฉีดเข้ามา (codex developer/env context) — ไม่ใช่เสียงผู้ใช้จริง
+  /^(# AGENTS\.md instructions|<INSTRUCTIONS>|<recommended_plugins>|<environment_context|<user_instructions)/i.test(t.trim());
+
+/** อ่านหัวไฟล์เท่าที่จำเป็น (session meta + ข้อความแรกอยู่หัวเสมอ) — ไฟล์ใหญ่ 4GB ห้ามอ่านทั้งก้อน */
+function readHead(file, bytes = 96 * 1024) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buf = Buffer.alloc(bytes);
+    const n = fs.readSync(fd, buf, 0, bytes, 0);
+    return buf.toString('utf8', 0, n);
+  } finally { fs.closeSync(fd); }
+}
+
+/** อ่านท้ายไฟล์ (ข้อความสุดท้าย/outcome อยู่ท้ายเสมอ) */
+function readTail(file, bytes = 256 * 1024) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const start = Math.max(0, size - bytes);
+    const buf = Buffer.alloc(Math.min(bytes, size));
+    const n = fs.readSync(fd, buf, 0, buf.length, start);
+    return buf.toString('utf8', 0, n);
+  } finally { fs.closeSync(fd); }
+}
+
+/** ไฟล์เล็กพอจะอ่านทั้งก้อนไหม (เกินนี้ใช้ head/tail/chunked แทน) */
+const FULL_READ_MAX = 3 * 1024 * 1024;
+function readIfSmall(file, max = FULL_READ_MAX) {
+  try {
+    return fs.statSync(file).size <= max ? fs.readFileSync(file, 'utf8') : null;
+  } catch { return null; }
+}
+
+/** ค้น q (lowercase) ในไฟล์แบบทีละ chunk — คืน snippet รอบจุดแรกที่เจอ หรือ null (ไม่โหลดทั้งไฟล์) */
+function chunkedGrep(file, q, { capBytes = 64 * 1024 * 1024 } = {}) {
+  const fd = fs.openSync(file, 'r');
+  try {
+    const size = fs.fstatSync(fd).size;
+    const limit = Math.min(size, capBytes);
+    const CHUNK = 4 * 1024 * 1024;
+    const buf = Buffer.alloc(CHUNK);
+    let offset = 0, carry = '';
+    while (offset < limit) {
+      const n = fs.readSync(fd, buf, 0, Math.min(CHUNK, limit - offset), offset);
+      if (n <= 0) break;
+      const hay = carry + buf.toString('utf8', 0, n).toLowerCase();
+      const i = hay.indexOf(q);
+      if (i >= 0) return hay.slice(Math.max(0, i - 80), i + q.length + 80);
+      carry = hay.slice(-(q.length + 200));
+      offset += n;
+    }
+    return null;
+  } finally { fs.closeSync(fd); }
+}
 
 /** ตัด tag ของ runtime (<meta .../>, <attachment>…</attachment>, <system>…</system>) ออกจากข้อความ */
 function stripTags(t) {
@@ -97,16 +154,23 @@ function scanContextStore(store) {
       const st = readJsonSafe(path.join(sessDir, 'state.json'));
       let mtime = 0, msgCount = 0, firstUser = '', firstUserAny = '';
       try { mtime = fs.statSync(ctx).mtimeMs; } catch { /* skip */ }
+      const full = readIfSmall(ctx); // ไฟล์ใหญ่อ่านเฉพาะหัว — msgCount = -1 (ไม่นับ)
+      let text;
+      if (full != null) text = full;
+      else {
+        msgCount = -1;
+        text = readHead(ctx);
+      }
       try {
-        for (const line of fs.readFileSync(ctx, 'utf8').split('\n')) {
+        for (const line of text.split('\n')) {
           if (!line.trim()) continue;
           let d; try { d = JSON.parse(line); } catch { continue; }
-          if (d.role === 'user' || d.role === 'assistant') msgCount++;
+          if (msgCount >= 0 && (d.role === 'user' || d.role === 'assistant')) msgCount++;
           if (d.role === 'user') {
-            const { text } = extractContent(d.content);
-            if (text) {
-              if (!firstUserAny) firstUserAny = text;
-              if (!firstUser && !isSystemish(text)) firstUser = truncate(stripTags(text), 120);
+            const { text: t } = extractContent(d.content);
+            if (t) {
+              if (!firstUserAny) firstUserAny = t;
+              if (!firstUser && !isSystemish(t)) firstUser = truncate(stripTags(t), 120);
             }
           }
         }
@@ -148,18 +212,22 @@ function scanDaimonStore(store) {
       const wire = path.join(sessDir, 'agents', 'main', 'wire.jsonl');
       let msgCount = 0, firstUser = '', firstUserAny = '';
       if (fs.existsSync(wire)) {
+        const full = readIfSmall(wire);
+        let text;
+        if (full != null) text = full;
+        else { msgCount = -1; text = readHead(wire); }
         try {
-          for (const line of fs.readFileSync(wire, 'utf8').split('\n')) {
+          for (const line of text.split('\n')) {
             if (!line.includes('context.append_message')) continue;
             let d; try { d = JSON.parse(line); } catch { continue; }
             if (d.type !== 'context.append_message' || !d.message) continue;
             const r = d.message.role;
-            if (r === 'user' || r === 'assistant') msgCount++;
+            if (msgCount >= 0 && (r === 'user' || r === 'assistant')) msgCount++;
             if (r === 'user') {
-              const { text } = extractContent(d.message.content);
-              if (text) {
-                if (!firstUserAny) firstUserAny = text;
-                if (!firstUser && !isSystemish(text)) firstUser = truncate(stripTags(text), 120);
+              const { text: t } = extractContent(d.message.content);
+              if (t) {
+                if (!firstUserAny) firstUserAny = t;
+                if (!firstUser && !isSystemish(t)) firstUser = truncate(stripTags(t), 120);
               }
             }
           }
@@ -177,13 +245,97 @@ function scanDaimonStore(store) {
   return out;
 }
 
+// ---------- codex store (rollout-*.jsonl ใต้ ~/.codex/sessions/YYYY/MM/DD) ----------
+
+function parseCodexSession(file) {
+  const p = { id: '', cwd: '', originator: 'codex' };
+  let mtime = 0, msgCount = 0, firstUser = '', firstUserAny = '';
+  try { mtime = fs.statSync(file).mtimeMs; } catch { return null; }
+  const full = readIfSmall(file);
+  let text;
+  if (full != null) text = full;
+  else { msgCount = -1; text = readHead(file); } // rollout ใหญ่ (รวม 4.3GB) อ่านเฉพาะหัว
+  try {
+    for (const line of text.split('\n')) {
+      if (!line.trim()) continue;
+      let d; try { d = JSON.parse(line); } catch { continue; }
+      const pl = d.payload;
+      if (!pl || typeof pl !== 'object') continue;
+      if (d.type === 'session_meta') {
+        if (pl.id) p.id = String(pl.id);
+        if (pl.cwd) p.cwd = String(pl.cwd);
+        if (pl.originator) p.originator = String(pl.originator);
+        continue;
+      }
+      if (d.type !== 'response_item' || pl.type !== 'message') continue;
+      if (msgCount >= 0 && (pl.role === 'user' || pl.role === 'assistant')) msgCount++;
+      if (pl.role === 'user') {
+        const { text: t } = extractContent(pl.content);
+        if (t) {
+          if (!firstUserAny) firstUserAny = t;
+          if (!firstUser && !isSystemish(t)) firstUser = truncate(stripTags(t), 120);
+        }
+      }
+    }
+  } catch { /* partial ok */ }
+  const id = p.id || path.basename(file, '.jsonl');
+  return {
+    store: 'codex', id, dir: path.dirname(file), file, kind: 'codex',
+    title: firstUser || truncate(stripTags(firstUserAny), 90),
+    workDir: p.cwd, runtime: p.originator, mtime, msgCount,
+  };
+}
+
+function scanCodexStore(store) {
+  const out = [];
+  for (const year of walkDirs(store.root, 0)) {
+    for (const month of walkDirs(year, 0)) {
+      for (const day of walkDirs(month, 0)) {
+        let files;
+        try { files = fs.readdirSync(day).filter((f) => f.startsWith('rollout-') && f.endsWith('.jsonl')); } catch { continue; }
+        for (const f of files) {
+          const s = parseCodexSession(path.join(day, f));
+          if (s) out.push(s);
+        }
+      }
+    }
+  }
+  return out;
+}
+
+/** อ่านข้อความจาก codex rollout — message + function_call + function_call_output (ไฟล์ >64MB อ่านหัว+ท้าย) */
+function readCodexMessages(file) {
+  const msgs = [];
+  if (!fs.existsSync(file)) return msgs;
+  const full = readIfSmall(file, 64 * 1024 * 1024);
+  const text = full != null ? full : readHead(file, 2 * 1024 * 1024) + '\n' + readTail(file, 2 * 1024 * 1024);
+  if (full == null) msgs.push({ role: '_notice', text: 'rollout ใหญ่เกิน 64MB — แสดงเฉพาะหัว+ท้ายไฟล์' });
+  for (const line of text.split('\n')) {
+    if (!line.includes('"response_item"')) continue;
+    let d; try { d = JSON.parse(line); } catch { continue; }
+    const pl = d.payload;
+    if (!pl || typeof pl !== 'object') continue;
+    if (d.type === 'response_item' && pl.type === 'message') {
+      const { text, think } = extractContent(pl.content);
+      msgs.push({ role: pl.role, text, think });
+    } else if (d.type === 'response_item' && pl.type === 'function_call') {
+      const args = typeof pl.arguments === 'string' ? pl.arguments : JSON.stringify(pl.arguments ?? '');
+      msgs.push({ role: 'tool_call', text: `${pl.name ?? '?'} ${args}`.trim() });
+    } else if (d.type === 'response_item' && pl.type === 'function_call_output') {
+      const out = typeof pl.output === 'string' ? pl.output : JSON.stringify(pl.output ?? '');
+      msgs.push({ role: 'tool', text: out });
+    }
+  }
+  return msgs;
+}
+
 // ---------- public API ----------
 export function listSessions({ limit = 20, store = null, dedupe = true } = {}) {
   let all = [];
   for (const s of STORES) {
     if (store && s.name !== store) continue;
     if (!fs.existsSync(s.root)) continue;
-    all = all.concat(s.kind === 'context' ? scanContextStore(s) : scanDaimonStore(s));
+    all = all.concat(s.kind === 'context' ? scanContextStore(s) : s.kind === 'wire' ? scanDaimonStore(s) : scanCodexStore(s));
   }
   all.sort((a, b) => b.mtime - a.mtime);
   if (dedupe) {
@@ -199,18 +351,25 @@ export function listSessions({ limit = 20, store = null, dedupe = true } = {}) {
   return all.slice(0, limit);
 }
 
-/** grep ข้อความดิบในไฟล์ context/wire ของ session — คืน snippet รอบจุดที่เจอ หรือ null */
+/** grep ข้อความดิบในไฟล์ context/wire/rollout ของ session — คืน snippet รอบจุดที่เจอ หรือ null (chunked ไม่โหลดทั้งไฟล์) */
 function grepSessionContent(sess, q) {
   const files = sess.kind === 'context'
     ? [path.join(sess.dir, 'context.jsonl')]
-    : [path.join(sess.dir, 'agents', 'main', 'wire.jsonl')];
+    : sess.kind === 'codex'
+      ? [sess.file]
+      : [path.join(sess.dir, 'agents', 'main', 'wire.jsonl')];
   for (const f of files) {
     if (!fs.existsSync(f)) continue;
-    let raw;
-    try { raw = fs.readFileSync(f, 'utf8'); } catch { continue; }
-    const i = raw.toLowerCase().indexOf(q);
-    if (i < 0) continue;
-    const snippet = raw.slice(Math.max(0, i - 80), i + q.length + 80);
+    const small = readIfSmall(f);
+    let snippet;
+    if (small != null) {
+      const i = small.toLowerCase().indexOf(q);
+      if (i < 0) continue;
+      snippet = small.slice(Math.max(0, i - 80), i + q.length + 80);
+    } else {
+      snippet = chunkedGrep(f, q);
+      if (snippet == null) continue;
+    }
     try {
       // พยายามดึงเฉพาะ field text ถ้า parse ได้ — ถ้าไม่ได้ใช้ดิบ
       return truncate(stripTags(JSON.parse(`{"t":${JSON.stringify(snippet)}}`).t), 200);
@@ -246,18 +405,34 @@ export function findSessions(query, { limit = 20, content = false } = {}) {
 function enrichSession(sess) {
   const f = sess.kind === 'context'
     ? path.join(sess.dir, 'context.jsonl')
-    : path.join(sess.dir, 'agents', 'main', 'wire.jsonl');
+    : sess.kind === 'codex'
+      ? sess.file
+      : path.join(sess.dir, 'agents', 'main', 'wire.jsonl');
   const userTexts = [], userTextsNonSystem = [];
   const tools = new Set();
   let lastText = '', lastTextAny = '';
   if (fs.existsSync(f)) {
     try {
-      for (const line of fs.readFileSync(f, 'utf8').split('\n')) {
+      // ไฟล์เล็ก: parse ทั้งหมดแม่น / ไฟล์ใหญ่: หัว (forkKey+tools ช่วงต้น) + ท้าย (outcome+tools ช่วงจบ)
+      const full = readIfSmall(f);
+      const text = full != null ? full : readHead(f) + '\n' + readTail(f);
+      for (const line of text.split('\n')) {
         if (!line.trim()) continue;
         let d; try { d = JSON.parse(line); } catch { continue; }
         let role, content, toolCalls;
         if (sess.kind === 'context') {
           role = d.role; content = d.content; toolCalls = d.tool_calls;
+        } else if (sess.kind === 'codex') {
+          const pl = d.payload;
+          if (!pl || typeof pl !== 'object') continue;
+          if (d.type === 'response_item' && pl.type === 'message') {
+            role = pl.role; content = pl.content;
+          } else if (d.type === 'response_item' && pl.type === 'function_call') {
+            if (pl.name) tools.add(String(pl.name));
+            continue;
+          } else if (d.type === 'response_item' && pl.type === 'function_call_output') {
+            role = 'tool'; content = typeof pl.output === 'string' ? pl.output : JSON.stringify(pl.output ?? '');
+          } else continue;
         } else {
           if (d.type !== 'context.append_message' || !d.message) continue;
           role = d.message.role; content = d.message.content;
@@ -371,9 +546,11 @@ export function readSession(idOrPrefix, { limit = 40, full = false, archives = f
   if (error) return { error, candidates };
   const raw = session.kind === 'context'
     ? readContextMessages(session.dir, { archives })
-    : readWireMessages(session.dir);
+    : session.kind === 'codex'
+      ? readCodexMessages(session.file)
+      : readWireMessages(session.dir);
 
-  const VISIBLE = full ? null : new Set(['user', 'assistant', 'tool']);
+  const VISIBLE = full ? null : new Set(['user', 'assistant', 'tool', 'tool_call']);
   const msgs = raw
     .filter((m) => (full ? m.text || m.think : VISIBLE.has(m.role)))
     .map((m) => ({
@@ -384,7 +561,7 @@ export function readSession(idOrPrefix, { limit = 40, full = false, archives = f
       ...(m.file && m.file !== 'context.jsonl' ? { file: m.file } : {}),
     }));
   return {
-    session: { store: session.store, id: session.id, dir: session.dir, title: session.title, workDir: session.workDir || undefined, msgCount: session.msgCount, mtime: new Date(session.mtime).toISOString() },
+    session: { store: session.store, id: session.id, dir: session.dir, title: session.title, workDir: session.workDir || undefined, runtime: session.runtime || undefined, msgCount: session.msgCount, mtime: new Date(session.mtime).toISOString() },
     total: msgs.length,
     shown: Math.min(msgs.length, limit),
     messages: msgs.slice(-limit),
@@ -402,7 +579,8 @@ function printList(items, json) {
   for (const s of items) {
     const t = new Date(s.mtime).toISOString().slice(0, 16).replace('T', ' ');
     const dup = s.alsoIn?.length ? ` (+${s.alsoIn.join(',')})` : '';
-    console.log(`${s.store.padEnd(9)} ${s.id.slice(0, 13).padEnd(14)} ${t}  msgs:${String(s.msgCount).padStart(4)}  ${truncate(s.title || '(no title)', 90)}${dup}`);
+    const msgs = s.msgCount < 0 ? '?' : String(s.msgCount);
+    console.log(`${s.store.padEnd(9)} ${s.id.slice(0, 13).padEnd(14)} ${t}  msgs:${msgs.padStart(4)}  ${truncate(s.title || '(no title)', 90)}${dup}`);
     if (s.workDir) console.log(`           ↳ ${s.workDir}`);
     if (s.snippet) console.log(`           ⌕ …${s.snippet}…`);
   }
@@ -441,7 +619,7 @@ async function main() {
     if (r.error) { console.error(r.error); if (r.candidates) console.error(JSON.stringify(r.candidates, null, 2)); process.exit(1); }
     if (json) return console.log(JSON.stringify(r, null, 2));
     const s = r.session;
-    console.log(`# ${s.store} ${s.id}\n# title: ${s.title}\n# dir: ${s.dir}${s.workDir ? `\n# workDir: ${s.workDir}` : ''}\n# msgs: ${s.msgCount} | แสดง ${r.shown}/${r.total}\n`);
+    console.log(`# ${s.store} ${s.id}\n# title: ${s.title}\n# dir: ${s.dir}${s.workDir ? `\n# workDir: ${s.workDir}` : ''}${s.runtime ? `\n# runtime: ${s.runtime}` : ''}\n# msgs: ${s.msgCount} | แสดง ${r.shown}/${r.total}\n`);
     r.messages.forEach((m, i) => {
       const tag = m.role === 'user' ? '👤' : m.role === 'assistant' ? '🤖' : '🔧';
       console.log(`[${i}] ${tag} ${m.role}${m.tool_calls ? ' +tool_calls' : ''}${m.file ? ` (${m.file})` : ''}`);
@@ -450,7 +628,7 @@ async function main() {
     });
   } else {
     console.log(`find-session — ค้น+อ่าน session เก่าจริง
-  list [--limit N] [--store miru-zero|kimi-code|daimon] [--json]
+  list [--limit N] [--store miru-zero|kimi-code|daimon|codex] [--json]
   find <query> [--content] [--limit N] [--json]   ค้น id/title/workDir (+เนื้อแชทถ้า --content)
   match <query> [--limit N] [--json]              "เคยทำไหม วิธีไหน ผลไง" — จับกลุ่มห้อง fork แสดง 1 อ้างอิง N uuid
   read <id|prefix> [--limit N] [--full] [--archives] [--json]`);

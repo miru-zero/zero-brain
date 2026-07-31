@@ -199,6 +199,31 @@ export function readAudit(root: string): AuditRecord[] {
   return readJsonl<AuditRecord>(kbPath(root, "audit.jsonl"));
 }
 
+// ---------- episodes (v2.6.0): log "ทำอะไร วิธีไหน ได้ผลไหม จาก runtime ไหน" ----------
+
+export interface EpisodeRecord {
+  id: string;
+  ts: string;
+  /** runtime ที่ส่ง episode มา — จาก MCP clientInfo (codex/kimi-code/daimon/…) ไม่ใช่การเดา */
+  runtime: string;
+  actor: string;
+  task: string;
+  method: string;
+  outcome: "pass" | "fail" | "partial";
+  evidence: string;
+  ssid?: string;
+  workspace?: string;
+  note?: string;
+}
+
+export function appendEpisode(root: string, record: EpisodeRecord): void {
+  appendJsonl(kbPath(root, "episodes.jsonl"), record);
+}
+
+export function readEpisodes(root: string): EpisodeRecord[] {
+  return readJsonl<EpisodeRecord>(kbPath(root, "episodes.jsonl"));
+}
+
 // ---------- write lock (กันหลาย MCP client เขียนชน) ----------
 // 4 clients (codex/kimi-claw/kimi-code/daimon) ผูก brain เดียวกัน — appendFileSync ดิบเสี่ยง
 // บรรทัด JSONL สลับ/หายเมื่อ 2 process เขียนพร้อมกัน lock เป็นไฟล์ .kb/write.lock (wx = create-exclusive)
