@@ -290,6 +290,32 @@ if (daimonRoot) {
     } else {
       note("daimon-plugin", "kimi.plugin.json", "OK (มีอยู่แล้ว)");
     }
+    // .mcp.json แบบ gildata — สัญญาแยกไฟล์สำหรับ local stdio MCP (manifest mcpServers อย่างเดียวอาจไม่พอ: ทุก plugin ที่ MCP ขึ้นจริงมีไฟล์นี้)
+    const mcpDecl = {
+      mcpServers: {
+        "zero-brain": {
+          command: AbsNode,
+          args: [Dist],
+          env: { ZERO_BRAIN_ACTOR: "kimi-work" },
+          tools: [
+            "zero_audit", "zero_capture", "zero_compact", "zero_episode", "zero_episodes",
+            "zero_find_session", "zero_health", "zero_home", "zero_init", "zero_link",
+            "zero_list_packs", "zero_match", "zero_nightly", "zero_read", "zero_read_session",
+            "zero_resolve", "zero_search", "zero_update_note", "zero_upgrade", "zero_write_note",
+          ],
+        },
+      },
+    };
+    const mcpDeclFile = path.join(pluginRoot, ".mcp.json");
+    const wantMcp = JSON.stringify(mcpDecl, null, 2) + "\n";
+    const curMcp = existsSync(mcpDeclFile) ? readFileSync(mcpDeclFile, "utf8") : null;
+    if (curMcp !== wantMcp) {
+      if (curMcp !== null) backup(mcpDeclFile);
+      writeFileSync(mcpDeclFile, wantMcp, "utf8");
+      note("daimon-plugin", ".mcp.json", curMcp === null ? "ADDED" : "UPDATED");
+    } else {
+      note("daimon-plugin", ".mcp.json", "OK (มีอยู่แล้ว)");
+    }
     // ลงทะเบียน installed.json — daimon โหลดเฉพาะ plugin ที่อยู่ใน registry นี้
     const installedFile = path.join(pluginsHome, "installed.json");
     const reg = readJsonSafe(installedFile) ?? { version: 1, plugins: [] };
