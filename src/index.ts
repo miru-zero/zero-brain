@@ -1431,7 +1431,7 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.3.1" },
+  { name: "zero-brain-mcp-server", version: "2.6.0" },
   { capabilities: { tools: {} } },
 );
 

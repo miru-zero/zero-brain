@@ -22,9 +22,16 @@ const results = [];
 function note(client, item, status) {
   results.push({ client, item, status });
 }
+const Stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
 function backup(p) {
-  const stamp = new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
-  cpSync(p, `${p}.bak-zero-setup-${stamp}`, { recursive: true }); // รองรับทั้งไฟล์และโฟลเดอร์ (skill dir)
+  cpSync(p, `${p}.bak-zero-setup-${Stamp}`, { recursive: true }); // ไฟล์ธรรมดา — sibling .bak ไม่ถูกสแกน
+}
+/** backup skill dir — ห้ามวาง sibling ใน skills root: client สแกน root เจอ .bak ที่มี SKILL.md ชื่อซ้ำ = skill ambiguous
+ *  ย้ายไป <parent ของ skills root>/.zero-backups/ แทน (นอกขอบเขตสแกน) */
+function backupSkill(p, skillDst) {
+  const backupsRoot = path.join(path.dirname(skillDst), ".zero-backups");
+  mkdirSync(backupsRoot, { recursive: true });
+  cpSync(p, path.join(backupsRoot, `${path.basename(p)}.bak-zero-setup-${Stamp}`), { recursive: true });
 }
 /** TOML basic string — ใช้ JSON escaping (backslash/quote ตรงกัน) */
 const tomlStr = (s) => JSON.stringify(s);
@@ -80,10 +87,14 @@ function readJsonSafe(file) {
   }
 }
 
-// skills: sync จาก repo/skills — เติมที่ขาด + อัปเดตที่เนื้อต่าง (backup ก่อน) — เดิมข้ามถ้ามีอยู่แล้ว อัปเดตไม่ไหล
+// skills: sync จาก repo/skills — เติมที่ขาด + อัปเดตที่เนื้อต่าง (backup ออกนอก skills root) — เดิมข้ามถ้ามีอยู่แล้ว อัปเดตไม่ไหล
 function syncSkills(client, skillDst) {
   const skillSrc = path.join(RepoDir, "skills");
-  if (!existsSync(skillSrc) || !existsSync(skillDst)) return;
+  if (!existsSync(skillSrc)) return;
+  if (!existsSync(skillDst)) {
+    note(client, "skills", `SKIP (ไม่มี ${skillDst})`);
+    return;
+  }
   for (const name of readdirSync(skillSrc, { withFileTypes: true })) {
     if (!name.isDirectory()) continue;
     const src = path.join(skillSrc, name.name);
@@ -93,14 +104,14 @@ function syncSkills(client, skillDst) {
       note(client, `skill ${name.name}`, "COPIED");
       continue;
     }
-    // เทียบไฟล์ทุกใบใน skill — ต่างแม้แต่ใบเดียว = อัปเดตทั้งโฟลเดอร์ (backup ก่อน)
+    // เทียบไฟล์ทุกใบใน skill — ต่างแม้แต่ใบเดียว = อัปเดตทั้งโฟลเดอร์ (backup นอก root ก่อน)
     const stale = readdirSync(src).some((f) => {
       const s = path.join(src, f);
       const t = path.join(target, f);
       return !existsSync(t) || readFileSync(s, "utf8") !== readFileSync(t, "utf8");
     });
     if (stale) {
-      backup(target);
+      backupSkill(target, skillDst);
       cpSync(src, target, { recursive: true });
       note(client, `skill ${name.name}`, "UPDATED");
     } else {
@@ -204,6 +215,10 @@ if (existsSync(kimiCode)) {
   }
   ensureBlock(path.join(kimiCode, "AGENTS.md"), "kimi-code");
   syncSkills("kimi-code", path.join(kimiCode, "skills"));
+  // client ตระกูล kimi-code (CLI/VSCode/desktop) อ่าน skills จากหลาย root — sync ให้ครบทุกจุดที่มีอยู่จริง กัน "ของใหม่ไม่เข้า"
+  syncSkills("kimi-code-home", path.join(kimiCode, "kimi-code-home", "skills"));
+  syncSkills("kimi-code-agents", path.join(kimiCode, "agents", "skills"));
+  syncSkills("kc-home-agents", path.join(kimiCode, "kimi-code-home", "agents", "skills"));
 } else {
   note("kimi-code", "-", "SKIP (ไม่มี ~/.kimi-code)");
 }
@@ -231,6 +246,82 @@ if (daimonRoot) {
   }
   const daimonSkills = path.join(daimonRoot, "skills");
   syncSkills("daimon", daimonSkills);
+  // ---------- 4b) plugin zero (MCP-only) — daimon rewrite mcp.json เองได้ แต่ plugin ลงทะเบียนใน installed.json ค้างยาวกว่า
+  // ไม่ใส่ skills ใน plugin: skills root sync อยู่แล้ว ใส่ซ้ำ = ชื่อ skill ชนกัน (ambiguous) เหมือนบั๊ก .bak
+  const pluginsHome = path.join(daimonHome, "plugins");
+  if (existsSync(pluginsHome)) {
+    const pluginRoot = path.join(pluginsHome, "managed", "zero");
+    mkdirSync(pluginRoot, { recursive: true });
+    const pkg = readJsonSafe(path.join(RepoDir, "package.json")) ?? {};
+    const manifest = {
+      $schema: "https://catalog.msh.team/misc/kimi.plugin.schema.json",
+      name: "zero",
+      version: String(pkg.version ?? "0.0.0"),
+      description:
+        "Zero Brain — หน่วยความจำถาวรของมิรุ: โน้ต Markdown + ลิงก์ + episodes (ทำอะไร/วิธีไหน/ได้ผลไหม/จาก runtime ไหน) ผ่าน MCP tools zero_* (stdio, local-first)",
+      keywords: ["zero-brain", "memory", "mcp", "miru", "obsidian", "episodes"],
+      author: "miru-zero",
+      homepage: "https://github.com/miru-zero/zero-brain",
+      license: "MIT",
+      interface: {
+        displayName: "Zero Brain",
+        shortDescription: "หน่วยความจำถาวรของมิรุ — โน้ต ลิงก์ episodes และเครื่องมือ zero_* ผ่าน MCP",
+        longDescription:
+          "Zero Brain เก็บความจำระยะยาวใน vault Markdown (~/.zero/brain) และเปิดผ่าน MCP server ภายในเครื่อง: ค้น/อ่าน/เขียนโน้ต จัดการลิงก์ จด episodes ตอนจบงาน และค้น session เก่าข้าม runtime (kimi-work, kimi-code, codex) — ข้อมูลอยู่ในเครื่องทั้งหมด",
+        developerName: "miru-zero",
+        websiteURL: "https://github.com/miru-zero/zero-brain",
+        category: "PRODUCTIVITY",
+      },
+      mcpServers: {
+        "zero-brain": {
+          command: AbsNode,
+          args: [Dist],
+          env: { ZERO_BRAIN_ACTOR: "kimi-work" },
+        },
+      },
+    };
+    const manifestFile = path.join(pluginRoot, "kimi.plugin.json");
+    const want = JSON.stringify(manifest, null, 2) + "\n";
+    const cur = existsSync(manifestFile) ? readFileSync(manifestFile, "utf8") : null;
+    if (cur !== want) {
+      if (cur !== null) backup(manifestFile);
+      writeFileSync(manifestFile, want, "utf8");
+      note("daimon-plugin", "kimi.plugin.json", cur === null ? "ADDED" : "UPDATED");
+    } else {
+      note("daimon-plugin", "kimi.plugin.json", "OK (มีอยู่แล้ว)");
+    }
+    // ลงทะเบียน installed.json — daimon โหลดเฉพาะ plugin ที่อยู่ใน registry นี้
+    const installedFile = path.join(pluginsHome, "installed.json");
+    const reg = readJsonSafe(installedFile) ?? { version: 1, plugins: [] };
+    reg.plugins ??= [];
+    const mine = reg.plugins.find((p) => p && p.id === "zero");
+    const nowIso = new Date().toISOString();
+    if (!mine) {
+      if (existsSync(installedFile)) backup(installedFile);
+      reg.plugins.push({
+        id: "zero",
+        root: pluginRoot,
+        source: "local-path",
+        enabled: true,
+        installedAt: nowIso,
+        updatedAt: nowIso,
+        originalSource: RepoDir,
+      });
+      writeFileSync(installedFile, JSON.stringify(reg, null, 2) + "\n", "utf8");
+      note("daimon-plugin", "installed.json", "ADDED zero (restart Kimi Work)");
+    } else if (mine.root !== pluginRoot || mine.enabled !== true) {
+      backup(installedFile);
+      mine.root = pluginRoot;
+      mine.enabled = true;
+      mine.updatedAt = nowIso;
+      writeFileSync(installedFile, JSON.stringify(reg, null, 2) + "\n", "utf8");
+      note("daimon-plugin", "installed.json", "UPDATED (restart Kimi Work)");
+    } else {
+      note("daimon-plugin", "installed.json", "OK (มีอยู่แล้ว)");
+    }
+  } else {
+    note("daimon-plugin", "-", "SKIP (ไม่มี plugins home)");
+  }
   // memory vault ของ main agent โหลดเข้า context ทุก session — ผูก block (ตัวตน+boot) เข้า about_user.md
   // กันตัวตนค้าง: ที่เขียนมืออยู่เหนือ block, block เป็น managed อัปเดตตาม repo เสมอ
   ensureBlock(path.join(daimonRoot, "agents", "main", "memory", "vault", "about_user.md"), "daimon", "vault about_user.md");
@@ -243,5 +334,6 @@ console.log("");
 for (const r of results) {
   console.log(`${r.client.padEnd(12)} ${r.item.padEnd(24)} ${r.status}`);
 }
-console.log("\nเสร็จ: ทุกไฟล์ที่ถูกแตะมี backup ต่อท้าย .bak-zero-setup-<เวลา> ข้างไฟล์เดิม");
+console.log("\nเสร็จ: ไฟล์ config ที่ถูกแตะมี backup ต่อท้าย .bak-zero-setup-<เวลา> ข้างไฟล์เดิม");
+console.log("ส่วน skill dir ที่ถูกแตะ backup ไป <ที่ๆไม่ถูกสแกน>/.zero-backups/ (กัน client เห็น skill ซ้ำ)");
 console.log("ขั้นสุดท้าย: node tools/verify-install.mjs แล้ว restart client แต่ละตัว");
