@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc",
     "init": "node dist/index.js --init",
+    "zero:init": "node tools/zero-init.mjs",
     "test": "node test/smoke.mjs"
   },
   "engines": {
