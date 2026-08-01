@@ -66,7 +66,36 @@ enabled.add(SNIPPET_NAME);
 appear.enabledCssSnippets = [...enabled].sort();
 writeJsonAtomic(appearPath, appear);
 
+// 6) graph.json → colorGroups สมอง (จัดกลุ่มสีตามโฟลเดอร์ brain)
+// query ทุกกลุ่มไม่ overlap กัน (catch-all ใส่ negation) — เรียงลำดับยังไงสีก็ถูก
+// ไม่ทับกลุ่มที่ผู้ใช้เพิ่มเอง: เก็บกลุ่มที่ไม่ใช่ managed/dead ไว้ต่อท้าย
+const BRAIN_DIRS = ['00_Fleeting', '10_Notes', '20_Atlas', '30_Sources', '40_Templates', '99_System'];
+const GROUP_RGB = {
+  '00_Fleeting': 16735370, '10_Notes': 2282478, '20_Atlas': 12339403,
+  '30_Sources': 10980346, '40_Templates': 10265519, '99_System': 15680580,
+};
+const CATCH_ALL = 'path:brain ' + BRAIN_DIRS.map((d) => `-path:brain/${d}`).join(' ');
+const GRAPH_GROUPS = [
+  ...BRAIN_DIRS.map((d) => ({ query: `path:brain/${d}`, rgb: GROUP_RGB[d] })),
+  { query: CATCH_ALL, rgb: 3462041 },
+];
+// กลุ่มตายจาก layout เก่า — โฟลเดอร์พวกนี้ถูก ignore แล้ว ไม่มีใน graph (ลบทิ้งเสมอ)
+const DEAD_GROUP_QUERIES = new Set(['path:mcp', 'path:share', 'path:SKILL', 'path:brain']);
+const MANAGED_QUERIES = new Set(GRAPH_GROUPS.map((g) => g.query));
+const graphPath = path.join(VAULT, 'graph.json');
+const graph = readJson(graphPath) || {};
+const keptGroups = (Array.isArray(graph.colorGroups) ? graph.colorGroups : []).filter((g) => {
+  const q = String(g?.query ?? '').trim();
+  return q && !DEAD_GROUP_QUERIES.has(q) && !MANAGED_QUERIES.has(q);
+});
+graph.colorGroups = [
+  ...GRAPH_GROUPS.map((g) => ({ query: g.query, color: { a: 1, rgb: g.rgb } })),
+  ...keptGroups,
+];
+writeJsonAtomic(graphPath, graph);
+
 console.log(`[zero-obsidian] vault: ${ZERO_HOME}`);
 console.log(`[zero-obsidian] ซ่อน ${hidden.length} รายการ: ${hidden.map((h) => h.name + (h.dir ? '/' : '')).join(', ') || '(ไม่มี)'}`);
 console.log(`[zero-obsidian] app.json userIgnoreFilters=${app.userIgnoreFilters.length} · snippet ${SNIPPET_NAME} เปิดแล้ว`);
+console.log(`[zero-obsidian] graph colorGroups=${graph.colorGroups.length} (managed ${GRAPH_GROUPS.length} + ของผู้ใช้ ${keptGroups.length})`);
 console.log('[zero-obsidian] ถ้า Obsidian เปิดค้างอยู่ ให้ reload (Ctrl+R) หรือปิดเปิดใหม่');
