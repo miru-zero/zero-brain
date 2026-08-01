@@ -6,7 +6,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "zero-brain": "dist/index.js"
+    "zero-brain": "dist/index.js",
+    "zero": "tools/zero.mjs"
   },
   "scripts": {
     "build": "tsc",

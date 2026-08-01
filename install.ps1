@@ -76,7 +76,12 @@ Info "node tools\setup-obsidian.mjs (ซ่อน mcp/share/… ให้เห�
 node (Join-Path $RepoDir "tools\setup-obsidian.mjs")
 if ($LASTEXITCODE -ne 0) { Die "setup-obsidian พัง — ดูข้อความด้านบน" }
 
-# --- 7) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
+# --- 7) ฝังคำสั่ง zero ลง global (~/.zero/bin + User PATH) ---
+Info "node tools\setup-cli.mjs (เรียก zero ได้จากทุกที่)"
+node (Join-Path $RepoDir "tools\setup-cli.mjs")
+if ($LASTEXITCODE -ne 0) { Die "setup-cli พัง — ดูข้อความด้านบน" }
+
+# --- 8) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
 Info "node tools\verify-install.mjs"
 node (Join-Path $RepoDir "tools\verify-install.mjs")
 if ($LASTEXITCODE -ne 0) { Die "verify-install ไม่ผ่าน — ดูข้อ ✘ ด้านบน" }
