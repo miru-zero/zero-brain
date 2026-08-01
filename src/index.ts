@@ -1051,8 +1051,8 @@ function handleAudit(args: Record<string, unknown>): unknown {
 
 type FindSessionModule = {
   listSessions: (opts?: { limit?: number; store?: string | null }) => unknown[];
-  findSessions: (query: string, opts?: { limit?: number; content?: boolean }) => unknown[];
-  matchSessions: (query: string, opts?: { limit?: number }) => unknown[];
+  findSessions: (query: string, opts?: { limit?: number; content?: boolean; deadlineMs?: number; recentCap?: number; info?: Record<string, unknown> }) => unknown[];
+  matchSessions: (query: string, opts?: { limit?: number; deadlineMs?: number; recentCap?: number; info?: Record<string, unknown> }) => unknown[];
   readSession: (id: string, opts?: { limit?: number; full?: boolean; archives?: boolean }) => unknown;
 };
 
@@ -1085,10 +1085,13 @@ async function handleFindSession(args: Record<string, unknown>): Promise<unknown
     ...(s.alsoIn?.length ? { alsoIn: s.alsoIn } : {}),
   });
   if (query) {
-    const hits = fsm.findSessions(query, { limit, content: args.content === true }) as SessRec[];
+    const ms = Math.min(Math.max(clampInt(args.ms, 8000) || 8000, 500), 30000);
+    const scanInfo: Record<string, unknown> = {};
+    const hits = fsm.findSessions(query, { limit, content: args.content === true, deadlineMs: ms, info: scanInfo }) as SessRec[];
+    const scan = { total: scanInfo.total ?? 0, grepped: scanInfo.grepped ?? 0, partial: scanInfo.partial === true, budget_ms: ms };
     return args.full === true
-      ? { ok: true, count: hits.length, sessions: hits }
-      : { ok: true, found: hits.length > 0, count: hits.length, sessions: hits.map(lean) };
+      ? { ok: true, count: hits.length, sessions: hits, scan }
+      : { ok: true, found: hits.length > 0, count: hits.length, sessions: hits.map(lean), scan };
   }
   const store = typeof args.store === "string" ? args.store : null;
   const all = fsm.listSessions({ limit, store }) as SessRec[];
@@ -1132,6 +1135,8 @@ async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
   const query = typeof args.query === "string" ? args.query.trim() : "";
   if (!query) throw new Error("ต้องระบุ query (เรื่องที่จะทำ)");
   const limit = clampInt(args.limit, 10) || 10;
+  // เวลาสแกน session สูงสุดต่อครั้ง (ms) — กัน MCP timeout ที่เคยตาย 34s (985 sessions) · default 8s เพดาน 30s
+  const ms = Math.min(Math.max(clampInt(args.ms, 8000) || 8000, 500), 30000);
   // แหล่ง 1: episodes — agent เคยจดไว้เองพร้อม outcome+runtime (แม่นสุด ไม่ต้องอนุมาน)
   const q = query.toLowerCase();
   const episodes = readEpisodes(ROOT)
@@ -1140,11 +1145,13 @@ async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
   const failEps = episodes.filter((e) => e.outcome === "fail");
   // แหล่ง 2: session เก่าทุก store (จับกลุ่มห้อง fork) — แหล่ง 3: โน้ตสมอง
   const fsm = await loadFindSession();
-  const sessions = fsm.matchSessions(query, { limit });
+  const scanInfo: { total?: number; grepped?: number; partial?: boolean } = {};
+  const sessions = fsm.matchSessions(query, { limit, deadlineMs: ms, info: scanInfo });
   const notes = handleSearch({ query, limit }) as { count?: number; results?: Record<string, unknown>[] };
+  const scan = { total: scanInfo.total ?? 0, grepped: scanInfo.grepped ?? 0, partial: scanInfo.partial === true, budget_ms: ms };
   // lean (default): groups/notes/episodes ตัดฟิลด์+ความยาวเหลือเท่าที่ตัดสินใจ — full:true ค่อยคืนดิบ
   if (args.full === true) {
-    return { ok: true, query, episodes_count: episodes.length, episodes, sessions_count: sessions.length, sessions, notes_count: notes.count ?? 0, notes: notes.results ?? [] };
+    return { ok: true, query, episodes_count: episodes.length, episodes, sessions_count: sessions.length, sessions, notes_count: notes.count ?? 0, notes: notes.results ?? [], scan };
   }
   interface Group { count: number; refs: { store: string; id: string }[]; title?: string; tools: string[]; outcome_hint?: string; snippet?: string }
   const leanGroups = (sessions as Group[]).map((g) => ({
@@ -1171,14 +1178,16 @@ async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
     sessions: leanGroups,
     notes_count: notes.count ?? 0,
     notes: leanNotes,
+    scan,
     hint:
-      failEps.length > 0
+      (scan.partial ? `⚠️ สแกน session ไม่ครบ (grep เนื้อ ${scan.grepped}/${scan.total} ห้องใน ${ms}ms) — ผลอาจตกหล่น ลอง query แคบลงหรือ ms สูงขึ้น · ` : "") +
+      (failEps.length > 0
         ? `⚠️ เคยลองเรื่องนี้แล้วไม่สำเร็จ ${failEps.length} ครั้ง (ดู episodes: method ไหน จาก runtime ไหน) — อย่าทำวิธีเดิมซ้ำ; ถ้าป๊าสั่งลองใหม่ ให้บอกว่ารอบนี้เปลี่ยนอะไร`
         : episodes.length > 0
           ? "เคยทำเรื่องนี้แล้วและจดผลไว้ (ดู episodes) — อ้างอิง method/evidence ได้เลย"
           : sessions.length > 0
             ? "ไม่มี episode ที่จดไว้ แต่เจอร่องรอยใน session เก่า — ดู refs (uuid) + tools + outcome_hint ก่อนลงมือ"
-            : "ไม่เจอร่องรอยทั้ง episodes/session — ดู notes อย่างเดียว หรือถือว่าเรื่องใหม่",
+            : "ไม่เจอร่องรอยทั้ง episodes/session — ดู notes อย่างเดียว หรือถือว่าเรื่องใหม่"),
   };
 }
 

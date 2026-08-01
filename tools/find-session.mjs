@@ -451,20 +451,26 @@ function grepSessionContent(sess, q) {
   return null;
 }
 
-export function findSessions(query, { limit = 20, content = false } = {}) {
+export function findSessions(query, { limit = 20, content = false, deadlineMs = 8000, recentCap = 250, info } = {}) {
   const q = norm(query);
   if (!q) return [];
+  const deadline = Date.now() + deadlineMs;
   const all = listSessions({ limit: 100000 });
   const hits = [];
+  let grepped = 0;
   for (const s of all) {
     const meta = norm(s.id).includes(q) || norm(s.title).includes(q) || norm(s.workDir).includes(q);
     if (meta) { hits.push(s); continue; }
     if (content) {
+      // content grep แพง (ไฟล์ละครั้ง) — จำกัด recentCap ห้องใหม่สุด + หยุดเมื่อหมดเวลา กัน MCP timeout
+      if (grepped >= recentCap || Date.now() > deadline) break;
+      grepped++;
       const snippet = grepSessionContent(s, q);
       if (snippet != null) hits.push({ ...s, snippet });
     }
     if (hits.length >= limit) break;
   }
+  if (info) { info.total = all.length; info.grepped = grepped; info.partial = content && grepped < all.length - hits.length; }
   return hits.slice(0, limit);
 }
 
@@ -542,15 +548,20 @@ function enrichSession(sess) {
  * matchSessions(query) — ค้นเนื้อแชททุก session แล้วจับกลุ่มห้อง fork/ลองซ้ำ:
  * แสดง 1 รายการต่อกลุ่ม อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint (ข้อความสุดท้ายของห้องใหม่สุด)
  */
-export function matchSessions(query, { limit = 20 } = {}) {
+/**
+ * matchSessions(query) — ค้นเนื้อแชททุก session แล้วจับกลุ่มห้อง fork/ลองซ้ำ:
+ * แสดง 1 รายการต่อกลุ่ม อ้างอิง N uuid + tools ที่เคยใช้ + outcome hint (ข้อความสุดท้ายของห้องใหม่สุด)
+ *
+ * performance (บทเรียน 34s timeout): meta hits (ชื่อ/id/workDir) ไม่ต้องอ่านไฟล์เก็บก่อน ·
+ * content grep แพง จำกัด recentCap ห้องใหม่สุด + หยุดเมื่อเกิน deadlineMs — คืน partial ทาง info
+ */
+export function matchSessions(query, { limit = 20, deadlineMs = 8000, recentCap = 250, info } = {}) {
   const q = norm(query);
   if (!q) return [];
+  const deadline = Date.now() + deadlineMs;
+  const all = listSessions({ limit: 100000 }); // sort mtime ใหม่สุดก่อนอยู่แล้ว
   const groups = new Map();
-  for (const s of listSessions({ limit: 100000 })) {
-    // ชื่อห้อง/id/workDir match ก็นับ — ไม่บังคับ grep เนื้อ (กัน "session boot" พลาดห้อง SESSION_BOOT)
-    const metaHit = norm(s.id).includes(q) || norm(s.title).includes(q) || norm(s.workDir).includes(q);
-    const snippet = metaHit ? `[ชื่อห้อง] ${s.title || s.id}` : grepSessionContent(s, q);
-    if (snippet == null) continue;
+  const take = (s, snippet) => {
     const e = enrichSession(s);
     let g = groups.get(e.forkKey);
     if (!g) {
@@ -563,6 +574,32 @@ export function matchSessions(query, { limit = 20 } = {}) {
     if (s.mtime >= g.mtime) {
       g.mtime = s.mtime; g.title = s.title; g.snippet = snippet; g.outcome_hint = e.lastText;
     }
+  };
+  // pass 1: meta hits — ไม่ต้องอ่านไฟล์ session เลย เก็บได้ทุกตัวถ้าเวลาเหลือ
+  const rest = [];
+  let metaHits = 0;
+  for (const s of all) {
+    if (Date.now() > deadline) { rest.push(s); continue; }
+    if (norm(s.id).includes(q) || norm(s.title).includes(q) || norm(s.workDir).includes(q)) {
+      metaHits++;
+      take(s, `[ชื่อห้อง] ${s.title || s.id}`);
+    } else {
+      rest.push(s);
+    }
+  }
+  // pass 2: content grep เฉพาะ recentCap ห้องใหม่สุดที่ meta ไม่ hit + หยุดเมื่อหมดเวลา
+  let grepped = 0;
+  for (const s of rest) {
+    if (grepped >= recentCap || Date.now() > deadline) break;
+    grepped++;
+    const snippet = grepSessionContent(s, q);
+    if (snippet != null) take(s, snippet);
+  }
+  if (info) {
+    info.total = all.length;
+    info.metaHits = metaHits;
+    info.grepped = grepped;
+    info.partial = grepped < rest.length;
   }
   return [...groups.values()]
     .map((g) => ({ ...g, tools: [...g.tools] }))
