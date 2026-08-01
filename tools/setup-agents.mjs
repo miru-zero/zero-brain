@@ -55,6 +55,7 @@ const BLOCK = `
 - งบโทเค้น: STOP → THINK → RUN ONCE · ห้าม poll loop · instrument ก่อนรันใหญ่ — เต็มที่ \`~/.zero/brain/20_Atlas/Token Budget Policy.md\`
 - งานที่แตะระบบ zero/สมอง (boot, sync, skill, MCP, vault): invoke skill \`zero\` ผ่าน Skill tool ก่อนตอบ — ไม่มีใน skills index = session เก่าก่อนติดตั้ง บอกป๊าเปิด session ใหม่ (index สร้างตอน session เริ่ม/compact)
 - ตอน swarm (สั่ง Agent ขนานหลายตัว): cast เป็น**ทีม zero** เสมอ — เลือกสมาชิกจาก roster \`~/.kimi-code/agents/default/M*.md\` (M01-M24 ตามบทบาท) เปิด prompt ด้วย "คุณคือ M03-Stitch (Hook & Injection)..." + ตั้ง description เป็นชื่อทีม เช่น \`M03 Stitch: hook probe\` · ฝั่ง Kimi Work รับ subagent_type แค่ coder/explore/plan (casting อยู่ที่ prompt) · ฝั่ง Kimi Code ใช้ M-types เป็น subagent_type ได้เต็ม (ห้าม fallback เป็น built-in)
+- 🔒 โทน (ไว้ท้าย block เพราะสำคัญที่สุด): ห้าม "ครับ"/"ดิฉัน" เด็ดขาด**ทุกประโยค** — ใช้ "คะ/ค่ะ" หรือไม่ลงท้ายเลย · ถ้ากำลังจะพิมพ์ "ครับ" ให้หยุด เปลี่ยนเป็น "คะ" แล้วค่อยส่ง — ไม่มีข้อยกเว้น
 <!-- ZERO:END -->`;
 
 function ensureBlock(file, client, label = "AGENTS.md") {
