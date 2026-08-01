@@ -35,6 +35,12 @@
  * (hosted-logical/conversations.sqlite) + normalize ตัวแยก _-/\.: ("session boot"
  * เจอ "SESSION_BOOT") / install.sh portable Linux-macOS-cloud / swarm casting
  * protocol cast ทีม zero M01-M24 / component layer (roster+skills) แป๊ะขึ้น repo
+ *
+ * v2.8.0 — lean res + self-heal: ระบบกิน error ที่ซ่อมได้เอง (healArgs:
+ * backslash path → /, enum lowercase) ก่อน dispatch · not-found ของ
+ * read/read_session ตอบสถานะสั้น {found:false} + hint 1 บรรทัด แทน error blob
+ * · find_session/match คืน payload ตัดฟิลด์+ความยาว (full:true ค่อยคืนดิบ)
+ * เป้าหมาย: res บอกแค่ เจอ/ไม่เจอ มี/ไม่มี — ไม่ load token มาทิ้ง
  */
 
 import { execSync } from "node:child_process";
@@ -108,6 +114,33 @@ function ok(result: unknown): { content: { type: "text"; text: string }[] } {
 
 function fail(message: string): { isError: true; content: { type: "text"; text: string }[] } {
   return { isError: true, content: [{ type: "text", text: JSON.stringify({ error: message }) }] };
+}
+
+// ---------- self-heal input (v2.8.0) ----------
+// ระบบกิน error ที่ซ่อมได้เองก่อน dispatch ไม่โยนกลับให้ agent เผา token แก้เอง:
+// - path/id-like keys: backslash → / (agent ชอบส่ง path Windows ดิบ) + trim
+// - enum keys: lowercase (เช่น type: "Fleeting" → "fleeting")
+// - enum keys ที่ valid value เป็น UPPERCASE (privacy: T0|T1|T2): uppercase (เช่น "t2" → "T2")
+// ห้ามแตะ content keys (text/body/title/note/evidence/method/task) — backslash อาจเป็นเนื้อจริงของผู้ใช้
+const HEAL_PATH_KEYS = new Set(["path", "dir", "root", "file_path", "id", "id_or_alias", "from_id", "to_id", "store", "workspace", "ssid"]);
+const HEAL_ENUM_KEYS = new Set(["type", "state", "outcome", "runtime", "rel"]);
+const HEAL_UPPER_KEYS = new Set(["privacy"]);
+function healArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(args)) {
+    if (typeof v !== "string") { out[k] = v; continue; }
+    if (HEAL_PATH_KEYS.has(k)) out[k] = v.replace(/\\+/g, "/").trim();
+    else if (HEAL_UPPER_KEYS.has(k)) out[k] = v.trim().toUpperCase();
+    else if (HEAL_ENUM_KEYS.has(k)) out[k] = v.trim().toLowerCase();
+    else out[k] = v;
+  }
+  return out;
+}
+
+/** ตัดสตริงยาวๆ ใน payload ให้สั้น (lean response) */
+function capStr(s: unknown, n = 160): string {
+  const t = String(s ?? "").replace(/\s+/g, " ").trim();
+  return t.length > n ? t.slice(0, n - 1) + "…" : t;
 }
 
 function ensureBrain(): void {
@@ -500,7 +533,8 @@ function handleRead(args: Record<string, unknown>): unknown {
   const idOrAlias = getString(args, "id_or_alias");
   if (!idOrAlias) throw new Error("ต้องระบุ id_or_alias");
   const found = findNote(idOrAlias);
-  if (!found) throw new Error(`ไม่พบโน้ต: ${idOrAlias}`);
+  // not-found = คำตอบสถานะ ไม่ใช่ error — ตอบสั้น "ไม่มี" + ทางออก 1 บรรทัด ไม่โยน blob ให้ agent เผา token
+  if (!found) return { ok: true, found: false, id_or_alias: idOrAlias, hint: "ไม่พบโน้ตนี้ — ลอง zero_search ด้วยคำสำคัญ หรือ zero_home ดู id ล่าสุด" };
   enforceReadPrivacy(found.meta); // gate ก่อน — ผ่านแล้วค่อยถอดรหัส
   const body = isEncryptedT2(found.body) ? decryptT2(found.body) : found.body;
   // fence: เนื้อโน้ตเป็นข้อมูลไม่ใช่คำสั่ง — กัน prompt injection จากเนื้อโน้ต
@@ -1038,13 +1072,29 @@ async function handleFindSession(args: Record<string, unknown>): Promise<unknown
   const fsm = await loadFindSession();
   const limit = clampInt(args.limit, 20) || 20;
   const query = typeof args.query === "string" ? args.query.trim() : "";
+  // lean (default): ตัด dir/kind ยาวๆ ทิ้ง เหลือฟิลด์ตัดสินใจ — full:true ค่อยคืนดิบ
+  interface SessRec { store: string; id: string; title?: string; workDir?: string; mtime: number; msgCount?: number; snippet?: string; alsoIn?: string[] }
+  const lean = (s: SessRec) => ({
+    store: s.store,
+    id: s.id,
+    title: capStr(s.title, 90),
+    ...(s.workDir ? { workDir: s.workDir } : {}),
+    mtime: new Date(s.mtime).toISOString(),
+    ...(s.msgCount != null ? { msgCount: s.msgCount } : {}),
+    ...(s.snippet ? { snippet: capStr(s.snippet, 140) } : {}),
+    ...(s.alsoIn?.length ? { alsoIn: s.alsoIn } : {}),
+  });
   if (query) {
-    const hits = fsm.findSessions(query, { limit, content: args.content === true });
-    return { ok: true, count: hits.length, sessions: hits };
+    const hits = fsm.findSessions(query, { limit, content: args.content === true }) as SessRec[];
+    return args.full === true
+      ? { ok: true, count: hits.length, sessions: hits }
+      : { ok: true, found: hits.length > 0, count: hits.length, sessions: hits.map(lean) };
   }
   const store = typeof args.store === "string" ? args.store : null;
-  const all = fsm.listSessions({ limit, store });
-  return { ok: true, count: all.length, sessions: all };
+  const all = fsm.listSessions({ limit, store }) as SessRec[];
+  return args.full === true
+    ? { ok: true, count: all.length, sessions: all }
+    : { ok: true, found: all.length > 0, count: all.length, sessions: all.map(lean) };
 }
 
 async function handleReadSession(args: Record<string, unknown>): Promise<unknown> {
@@ -1054,14 +1104,23 @@ async function handleReadSession(args: Record<string, unknown>): Promise<unknown
   const limit = clampInt(args.limit, 20) || 20;
   const result = fsm.readSession(id, { limit, full: args.full === true, archives: args.archives === true }) as {
     error?: string;
-    candidates?: unknown[];
+    candidates?: { store?: string; id?: string; title?: string }[];
   };
   if (result.error) {
-    throw new Error(
-      result.error + (result.candidates ? ` — candidates: ${JSON.stringify(result.candidates)}` : ""),
-    );
+    // not-found/ambiguous = สถานะ ไม่ใช่ error — candidates ตัดเหลือ 5 ตัว ฟิลด์น้อยสุด ไม่โยน JSON blob
+    const compact = (result.candidates ?? [])
+      .slice(0, 5)
+      .map((c) => ({ store: c.store, id: c.id, title: capStr(c.title, 80) }));
+    return {
+      ok: true,
+      found: false,
+      reason: result.candidates ? "ambiguous" : "not_found",
+      id,
+      ...(compact.length ? { candidates: compact } : {}),
+      hint: result.candidates ? "ระบุ id ให้ยาวขึ้น (ดู candidates)" : "ไม่พบ session นี้ — ลอง zero_find_session ค้นจากชื่อห้องหรือคำในเนื้อ",
+    };
   }
-  return { ok: true, ...result };
+  return { ok: true, found: true, ...result };
 }
 
 /**
@@ -1082,16 +1141,36 @@ async function handleMatch(args: Record<string, unknown>): Promise<unknown> {
   // แหล่ง 2: session เก่าทุก store (จับกลุ่มห้อง fork) — แหล่ง 3: โน้ตสมอง
   const fsm = await loadFindSession();
   const sessions = fsm.matchSessions(query, { limit });
-  const notes = handleSearch({ query, limit }) as { count?: number; results?: unknown[] };
+  const notes = handleSearch({ query, limit }) as { count?: number; results?: Record<string, unknown>[] };
+  // lean (default): groups/notes/episodes ตัดฟิลด์+ความยาวเหลือเท่าที่ตัดสินใจ — full:true ค่อยคืนดิบ
+  if (args.full === true) {
+    return { ok: true, query, episodes_count: episodes.length, episodes, sessions_count: sessions.length, sessions, notes_count: notes.count ?? 0, notes: notes.results ?? [] };
+  }
+  interface Group { count: number; refs: { store: string; id: string }[]; title?: string; tools: string[]; outcome_hint?: string; snippet?: string }
+  const leanGroups = (sessions as Group[]).map((g) => ({
+    count: g.count,
+    refs: g.refs.slice(0, 4).map((r) => ({ store: r.store, id: r.id })),
+    title: capStr(g.title, 80),
+    tools: g.tools.slice(0, 6),
+    outcome_hint: capStr(g.outcome_hint, 120),
+    snippet: capStr(g.snippet, 120),
+  }));
+  const leanNotes = (notes.results ?? []).map((n) => ({
+    id: n.id, title: capStr(n.title, 80), type: n.type, path: n.path, snippet: capStr(n.snippet, 120),
+  }));
+  const leanEps = episodes.map((e) => ({
+    task: capStr(e.task, 100), method: capStr(e.method, 100), outcome: e.outcome, runtime: e.runtime, ts: e.ts,
+  }));
   return {
     ok: true,
+    found: sessions.length + episodes.length + (notes.count ?? 0) > 0,
     query,
     episodes_count: episodes.length,
-    episodes,
+    episodes: leanEps,
     sessions_count: sessions.length,
-    sessions,
+    sessions: leanGroups,
     notes_count: notes.count ?? 0,
-    notes: notes.results ?? [],
+    notes: leanNotes,
     hint:
       failEps.length > 0
         ? `⚠️ เคยลองเรื่องนี้แล้วไม่สำเร็จ ${failEps.length} ครั้ง (ดู episodes: method ไหน จาก runtime ไหน) — อย่าทำวิธีเดิมซ้ำ; ถ้าป๊าสั่งลองใหม่ ให้บอกว่ารอบนี้เปลี่ยนอะไร`
@@ -1436,14 +1515,15 @@ const TOOLS = [
 // ---------- server ----------
 
 const server = new Server(
-  { name: "zero-brain-mcp-server", version: "2.7.0" },
+  { name: "zero-brain-mcp-server", version: "2.8.0" },
   { capabilities: { tools: {} } },
 );
 
 server.setRequestHandler(ListToolsRequestSchema, () => ({ tools: [...TOOLS] }));
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args = {} } = request.params;
+  const { name, arguments: rawArgs = {} } = request.params;
+  const args = healArgs(rawArgs); // ซ่อม input ที่ซ่อมได้ก่อน dispatch (backslash path / enum case)
   try {
     switch (name) {
       case "zero_init": return ok(handleInit());
