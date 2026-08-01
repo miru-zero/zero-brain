@@ -1,112 +1,60 @@
 ---
 name: zero-brain-memory
 description: >
-  Enforce Zero_Brain memory placement rules when creating or organizing notes
-  under %ZERO_BRAIN_PATH% or the runtime mirror under %MIRU_ZERO_SHARE_DIR% /
-  %KIMI_SHARE_DIR%. Auto-activate on Zero_Brain vault paths or triggers:
-  "memory", "place memory", "ingest session", "Zero Brain", "vault",
-  "จัด memory", "วาง memory", "focus", "session focus".
+  Enforce Zero Brain memory placement rules when creating, moving, or
+  organizing notes under ~/.zero/brain (ZERO_BRAIN_ROOT). Auto-activate on
+  brain vault paths or triggers: "memory", "place memory", "ingest session",
+  "Zero Brain", "vault", "จัด memory", "วาง memory", "focus", "session focus",
+  "จด", "capture". All memory operations go through zero-brain MCP tools
+  (zero_*) — never edit vault files directly without rehash.
 ---
 
-# zero-brain-memory — Zero_Brain Memory Placement Skill
+# zero-brain-memory — กฎวางความจำ Zero Brain (โซนใหม่ ~/.zero)
 
-## Auto-activation
+## แผนที่สมอง (จำให้ขึ้นใจ)
 
-Activate automatically when ANY of these are true:
+| Path | คืออะไร | กฎ |
+|---|---|---|
+| `~/.zero/brain/` | vault ความจำ (Obsidian เปิดที่นี่เท่านั้น) | อ่าน `AGENTS.md` ใน root ก่อนเสมอ |
+| `~/.zero/brain/.kb/` | manifest / links / audit / episodes (JSONL append-only) | ห้ามแตะด้วยมือ — ผ่าน MCP เท่านั้น |
+| `~/.zero/mcp/zero-brain/` | repo + MCP server (tools `zero_*`) | commit ต้อง smoke 121/121 ก่อน |
 
-- Current workspace path contains `Zero_Brain` (design or runtime mirror)
-- User explicitly says: "memory", "place memory", "ingest session", "Zero Brain",
-  "vault", "จัด memory", "วาง memory", "save to vault", "focus", "session focus"
+## กฎเหล็ก
 
-## Mandatory read order
+1. **ทุกการเขียน/ย้าย/ลบความจำผ่าน tools `zero_*` เท่านั้น** — ห้ามแก้ไฟล์ vault ตรงๆ; ถ้าบังคับจำเป็น รัน `node tools/rehash-manifest.mjs` ทันทีหลังแก้
+2. **orphans ต้อง = 0** — โน้ตใหม่ทุกใบ `zero_link` เข้า MOC/index อย่างน้อย 1 เส้น แล้วเช็ค `zero_health`
+3. **ห้ามเก็บในสมอง**: credentials, tokens, PII, raw wire logs, full session dumps
+4. privacy: `T0` default · `T1` ไม่โผล่ search default · `T2` เข้ารหัส อ่านต้องอนุมัติรายใบ — ใส่ privacy ให้ถูกตั้งแต่สร้าง
 
-Before placing any new note, read in this order:
+## เครื่องมือ → ปลายทาง
 
-1. `%ZERO_BRAIN_PATH%\00 Atlas\Hotcache.md` — read first; if it answers the question, stop here
-2. `%ZERO_BRAIN_PATH%\00 Atlas\Brain Operating Model.md`
-3. `%ZERO_BRAIN_PATH%\00 Atlas\Memory Placement Rules.md`
-4. `%ZERO_BRAIN_PATH%\00 Atlas\System\Compaction Brain Sync Hook.md`
-5. `%ZERO_BRAIN_PATH%\000 Miru Zero Index.md`
-
-Before running commands or writing code, also read:
-
-6. `%ZERO_BRAIN_PATH%\03 Resources\Patterns\Mistake Patterns.md` — to avoid repeating known mistakes
-
-## Short-term session memory (per SSID)
-
-Every session has a short-term focus file:
-
-- Path: `%ZERO_BRAIN_PATH%\05 Fleeting\<session-id>-focus.md`
-- Purpose: rewrite/read/review to avoid losing focus during long sessions
-- The file is **overwritten** as the session progresses (do not append)
-- The compaction hook also rewrites this file automatically
-
-**Procedure:**
-
-1. At session start, detect or create `05 Fleeting\<ssid>-focus.md`.
-2. Read it before each significant turn if the session is long or context has drifted.
-3. Update it whenever the goal, open questions, or next steps change.
-4. At session end, move any lasting value to `03 Resources/` or `01 Projects/`.
+| ต้องการ | ใช้ tool | ลงที่ |
+|---|---|---|
+| จดด่วน / focus ระหว่าง session | `zero_capture` | `00_Fleeting/` |
+| ความรู้ถาวร / log งาน | `zero_write_note` (atomic/entity ต้อง evidence ≥1) | `10_Notes/` |
+| ดัชนี / MOC / กฎระบบ | `zero_write_note` ชี้ path `20_Atlas/` | `20_Atlas/` |
+| จบงาน: ทำอะไร/วิธีไหน/ได้ผลไหม/จาก runtime ไหน | `zero_episode` | `.kb/episodes.jsonl` |
+| ค้นก่อนสร้างใหม่ (กันซ้ำ) | `zero_search` / `zero_match` | — |
+| ผูกเข้ากราฟ | `zero_link` (เช็ค from/to/rel ทั้งสองทิศ กันซ้ำในตัว) | `.kb/links.jsonl` |
 
 ## Placement decision tree
 
-Ask these questions in order:
+1. ความคิดชั่วคราว / focus สั้นๆ → `zero_capture` (00_Fleeting) — เก็บเกี่ยวใน 7 วัน
+2. ความรู้ใช้ซ้ำ / บทเรียน / log โปรเจ็กต์ → `zero_write_note` ลง `10_Notes/` (โปรเจ็กต์: `10_Notes/Projects/<ชื่อ>/`)
+3. ดัชนี แผนที่ กฎที่ agent ต้องอ่าน → `20_Atlas/`
+4. ไม่แน่ใจ → ถามป๊าก่อนวาง
+5. **ก่อนสร้างใหม่ทุกครั้ง**: `zero_search` หาของเดิมก่อน — มีแล้วให้ `zero_update_note` ไม่สร้างซ้ำ
 
-1. **Is it an index, map, registry, operating model, or rule?**
-   → Place in `00 Atlas/`
-2. **Does it belong to an active project/incident/investigation with a deadline?**
-   → Place in `01 Projects/<ProjectName>/`
-   → If extracted from a session, also acceptable in `01 Projects/Session Memory/`
-3. **Is it a long-term responsibility without deadline?**
-   → Place in `02 Areas/<AreaName>/`
-4. **Is it reusable reference knowledge (pattern, finding, snippet, sanitized session summary)?**
-   → Place in `03 Resources/<subfolder>/`
-5. **Is it a temporary scratch thought or short-term focus?**
-   → Place in `05 Fleeting/` and process within the session or 7 days
-6. **If unsure:** ask the user before placing
+## จบ session / compaction
 
-## Hard rules
+1. `zero_episode` สรุป: ทำอะไร เครื่องมือไหน ได้ผล/ไม่ได้ผล (ระบุ runtime ต้นทาง: kimi-work / kimi-code / codex)
+2. โน้ต fleeting ที่มีค่าถาวร → เลื่อนเป็น `zero_write_note` 10_Notes แล้ว link
+3. `zero_health` ปิดท้าย: notes ครบ / orphans = 0 / dead links = 0
 
-- **Source of truth is `%ZERO_BRAIN_PATH%`**. Never edit the runtime mirror as primary.
-- **Every new note must have ≥1 inbound link** from an index or another note.
-- **Never store in vault:** credentials, tokens, PII, raw wire logs, full session dumps, chat attachments.
-- **Runtime YAML files** live in `%ZERO_BRAIN_PATH%\runtime\` and are mirrored to `~\.miru_zero\agents\default`. They are NOT part of the Obsidian graph.
-- **Always update `000 Miru Zero Index.md`** when creating or moving a significant note.
-- **Always run sync scripts after placement**:
-  - `%ZERO_BRAIN_PATH%\tools\zero-brain\sync-zero-brain.ps1` — mirror vault to `~\.miru_zero\Zero_Brain`
-  - `%ZERO_BRAIN_PATH%\tools\zero-brain\sync-runtime-agents.ps1` — mirror runtime YAML to `~\.miru_zero\agents\default`
+## Output เมื่อวางความจำ
 
-## Compaction hook
+รายงาน: id + path ที่ tool คืน · privacy ที่ตั้ง · link ที่ผูกเข้า index ไหน · ผล zero_health หลังทำ
 
-When Kimi CLI auto-compacts context:
+## ตัวตนและ boot
 
-1. The hook writes a compacted session memory note to `01 Projects/Session Memory/`.
-2. It updates `Session Memory Index.md`.
-3. It detects the active project and appends to that project's session log.
-4. It rewrites `05 Fleeting\<ssid>-focus.md`.
-5. It runs both sync scripts.
-
-## Mistake patterns
-
-- Read `%ZERO_BRAIN_PATH%\03 Resources\Patterns\Mistake Patterns.md` before running commands or writing code.
-- If you make a repeated mistake, append it to that note or ask the user to confirm it should be added.
-- The compaction hook auto-extracts `<lessons_learned>` blocks from compacted summaries into this note.
-
-## Naming conventions
-
-- Agent notes: `Mxx-Name.md`
-- Session memory: `YYYYMMDD-HHMMSS - <short title>.md`
-- Compacted session memory: `YYYYMMDD-HHMMSS — Compacted Session Memory.md`
-- Short-term focus: `<ssid>-focus.md` in `05 Fleeting/`
-- Project folders: `<Short Project Name>`
-- Atomic notes: descriptive title, no strict prefix
-
-## Output
-
-When placing memory, report:
-
-- File path (relative to `%ZERO_BRAIN_PATH%`)
-- Placement category (Atlas / Project / Area / Resource / Fleeting)
-- Inbound link added to which index
-- Sanitization steps taken
-- Sync status
+เรื่อง boot / install / health / troubleshoot ระบบ Zero ทั้งหมด → ใช้ skill `zero` (คู่กัน) — skill นี้ครอบเฉพาะ "วางความจำให้ถูกที่"

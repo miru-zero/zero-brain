@@ -257,7 +257,14 @@ if (existsSync(kimiCode)) {
   note("kimi-code", "-", "SKIP (ไม่มี ~/.kimi-code)");
 }
 // .miru_zero zone เก่าของป๊า — IDE zero อ่าน roster จากที่นี่ด้วย sync ให้แป๊ะถ้ามีอยู่จริง
-syncRoster("miru-zero-old", path.join(HOME, "Documents", ".miru_zero", "agents", "default"));
+const miruOldRoot = [path.join(HOME, ".miru_zero"), path.join(HOME, "Documents", ".miru_zero")].find((p) => existsSync(p));
+if (miruOldRoot) {
+  syncRoster("miru-zero-old", path.join(miruOldRoot, "agents", "default"));
+  // skills ด้วย — ของในนี้ยังชี้โลกเก่า (M:\Zero_Brain) ต้องไหลตาม repo เหมือน client อื่น
+  syncSkills("miru-zero-old", path.join(miruOldRoot, "skills"));
+} else {
+  syncRoster("miru-zero-old", path.join(HOME, "Documents", ".miru_zero", "agents", "default"));
+}
 
 // ---------- 4) Daimon / Kimi Work (~/.zero/share) — MCP + skills ----------
 const daimonRoot = [
