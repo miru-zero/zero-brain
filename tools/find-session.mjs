@@ -29,6 +29,8 @@ const HOME = os.homedir();
 const MIRU_HOME = path.join(HOME, '.miru_zero');
 const DAIMON_HOME = path.join(HOME, '.zero', 'share', 'daimon-share', 'daimon', 'runtime', 'kimi-code', 'home');
 const DAIMON_SQLITE = path.resolve(DAIMON_HOME, '..', '..', '..', 'agents', 'main', 'sessions', 'hosted-logical', 'conversations.sqlite');
+/** config store เสริม (D:/backup/ไดรฟ์อื่น) — อยู่นอก repo เพราะเป็น path เฉพาะเครื่อง · mcp/ ถูกซ่อนจาก Obsidian แล้ว */
+const EXTRA_STORES_FILE = path.join(HOME, '.zero', 'mcp', 'find-session.stores.json');
 
 /** normalize สำหรับค้นหา — ตัวแยก _ - / \ . : เทียบเท่าช่องว่างเดียว (กัน "session boot" พลาด "SESSION_BOOT") */
 function norm(s) {
@@ -57,6 +59,35 @@ function loadSqliteTitles(dbPath) {
   return map;
 }
 
+/**
+ * extra stores จาก ~/.zero/mcp/find-session.stores.json — รองรับที่อยู่อื่น (D:, backup, ไดรฟ์ภายนอก)
+ * รูปแบบ: [{ "name": "backup-D", "root": "D:/backup/.miru_zero/sessions", "kind": "auto", "index"?, "titlesDb"? }]
+ *   kind: context | wire | codex | auto (auto = สแกนทั้ง context+wire layout ใต้ root เดียวกัน เหมือน miru-zero)
+ *   index ว่างไว้ = เดา sibling session_index.jsonl ของ root ให้เอง (wire เท่านั้น) · ไม่มีไฟล์ config = ไม่มี extra
+ */
+function loadExtraStores() {
+  let list;
+  try { list = JSON.parse(fs.readFileSync(EXTRA_STORES_FILE, 'utf8')); } catch (e) {
+    if (e.code !== 'ENOENT') console.error(`[find-session] อ่าน ${EXTRA_STORES_FILE} ไม่ได้: ${e.message} — ข้าม extra stores (JSON ห้ามมี backslash เดี่ยว ใช้ / แทน)`);
+    return [];
+  }
+  if (!Array.isArray(list)) list = list?.stores;
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const s of list) {
+    if (!s || typeof s.root !== 'string' || !s.root.trim()) continue;
+    const root = path.resolve(s.root);
+    const name = String(s.name || `extra-${out.length + 1}`);
+    const index = s.index ? path.resolve(s.index) : path.join(path.dirname(root), 'session_index.jsonl');
+    const titlesDb = s.titlesDb ? path.resolve(s.titlesDb) : null;
+    const kinds = s.kind === 'auto'
+      ? ['context', 'wire']
+      : [['context', 'wire', 'codex'].includes(s.kind) ? s.kind : 'wire'];
+    for (const kind of kinds) out.push({ name, root, kind, index, titlesDb });
+  }
+  return out;
+}
+
 const STORES = [
   { name: 'miru-zero', root: path.join(MIRU_HOME, 'sessions'), kind: 'context' },
   // layout ใหม่ของ miru-zero (IDE ของเรา) = daimon wire — wd_*/session_*/ (scanner ข้าม hash dir เก่าให้เอง ไม่ซ้ำกับ context)
@@ -64,6 +95,7 @@ const STORES = [
   { name: 'kimi-code', root: path.join(HOME, '.kimi-code', 'sessions'), kind: 'context' },
   { name: 'daimon', root: path.join(DAIMON_HOME, 'sessions'), kind: 'wire', index: path.join(DAIMON_HOME, 'session_index.jsonl'), titlesDb: DAIMON_SQLITE },
   { name: 'codex', root: path.join(HOME, '.codex', 'sessions'), kind: 'codex' },
+  ...loadExtraStores(),
 ];
 
 // ---------- helpers ----------
@@ -674,7 +706,11 @@ async function main() {
   list [--limit N] [--store miru-zero|kimi-code|daimon|codex] [--json]
   find <query> [--content] [--limit N] [--json]   ค้น id/ชื่อห้อง(sidebar)/workDir (+เนื้อแชทถ้า --content) — ตัวแยก _-. ไม่มีผล
   match <query> [--limit N] [--json]              "เคยทำไหม วิธีไหน ผลไง" — match ชื่อห้อง+เนื้อ จับกลุ่มห้อง fork แสดง 1 อ้างอิง N uuid
-  read <id|prefix> [--limit N] [--full] [--archives] [--json]`);
+  read <id|prefix> [--limit N] [--full] [--archives] [--json]
+
+  extra stores (D:/backup/ไดรฟ์อื่น): ~/.zero/mcp/find-session.stores.json
+    [{"name":"backup-D","root":"D:/backup/.miru_zero/sessions","kind":"auto"}]
+    kind: context|wire|codex|auto (auto=สแกนทั้ง 2 layout) · ไม่มีไฟล์=ไม่สแกนเพิ่ม`);
     process.exit(cmd ? 2 : 0);
   }
 }
