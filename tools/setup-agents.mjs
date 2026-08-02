@@ -9,6 +9,7 @@
  * - command ของ MCP ใช้ absolute node (process.execPath) — แก้ปัญหา client ที่ PATH ไม่มี node แล้ว spawn ไม่ติด
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, copyFileSync, cpSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -396,6 +397,44 @@ if (daimonRoot) {
   ensureBlock(path.join(daimonRoot, "agents", "main", "memory", "vault", "about_user.md"), "daimon", "vault about_user.md");
 } else {
   note("daimon", "-", "SKIP (ไม่มี daimon)");
+}
+
+// ---------- 4c) Desktop gateway — ป๊าเจอบั๊ก: plugin zero อยู่ใน installed.json แต่ tools ไม่โผล่
+// เพราะ desktop app โหลด MCP เฉพาะ id ที่อยู่ใน plugin-gateway-managed.json (แยกจาก installed.json)
+const kimiAgentDir = process.env.APPDATA ? path.join(process.env.APPDATA, "kimi-desktop", "kimi-agent") : null;
+if (kimiAgentDir && existsSync(kimiAgentDir)) {
+  const gwFile = path.join(kimiAgentDir, "plugin-gateway-managed.json");
+  const metaFile = path.join(kimiAgentDir, "plugin-meta.json");
+  const gw = readJsonSafe(gwFile);
+  if (Array.isArray(gw)) {
+    if (!gw.includes("zero")) {
+      // id deterministic จาก sha256 (idempotent — รันซ้ำได้ค่าเดิม) รูปแบบตาม id อื่นในไฟล์
+      const h = createHash("sha256").update("zero-brain-plugin-id").digest("hex");
+      const uid = `19f8${h.slice(0, 4)}-4${h.slice(4, 7)}-8${h.slice(7, 10)}-8000-0000${h.slice(10, 22)}`;
+      backup(gwFile);
+      gw.push("zero", uid);
+      writeFileSync(gwFile, JSON.stringify(gw), "utf8");
+      note("desktop-gateway", "plugin-gateway-managed.json", `ADDED zero -> ${uid} (restart Kimi Work)`);
+    } else {
+      note("desktop-gateway", "plugin-gateway-managed.json", "OK (มีอยู่แล้ว)");
+    }
+  } else {
+    note("desktop-gateway", "plugin-gateway-managed.json", "SKIP (ไฟล์ไม่ใช่ array / ไม่มี)");
+  }
+  const meta = readJsonSafe(metaFile) ?? {};
+  let metaChanged = false;
+  for (const k of ["plugin-zero", "plugin-zero_zero-brain"]) {
+    if (!meta[k]) { meta[k] = { displayName: "Zero Brain" }; metaChanged = true; }
+  }
+  if (metaChanged) {
+    if (existsSync(metaFile)) backup(metaFile);
+    writeFileSync(metaFile, JSON.stringify(meta), "utf8");
+    note("desktop-gateway", "plugin-meta.json", "ADDED displayName Zero Brain");
+  } else {
+    note("desktop-gateway", "plugin-meta.json", "OK (มีอยู่แล้ว)");
+  }
+} else {
+  note("desktop-gateway", "-", "SKIP (ไม่มี kimi-desktop kimi-agent dir)");
 }
 
 // ---------- สรุป ----------
