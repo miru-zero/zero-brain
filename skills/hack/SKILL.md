@@ -25,6 +25,7 @@ Its core role is not to replace all specialized techniques, but to help the agen
 - This knowledge base emphasizes content safety and auditability.
 - Use this only within **authorized targets**, **legitimate research**, **defensive validation**, and **bug-bounty-approved rules**.
 - Do not use these techniques for unauthorized attacks.
+- **Zero Scope Gate**: ก่อน ACT กับ target จริงต้องมี scope + auth.status=granted + network_profile ครบ — อ่านสัญญาเต็มในสมอง (zero_search "Scope Gate") ไม่ครบให้ถามผู้ใช้ก่อนเสมอ ห้าม ACT
 
 ## When to Use This Skill
 

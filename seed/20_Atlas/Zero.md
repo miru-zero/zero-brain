@@ -1,4 +1,5 @@
 ---
+id: zero-6f7f0892
 title: Zero
 type: moc
 created: 2026-07-29

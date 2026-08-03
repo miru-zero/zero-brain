@@ -1,4 +1,5 @@
 ---
+id: sysref-d54c8c47
 title: Token Budget Policy
 type: moc
 created: 2026-07-30

@@ -81,7 +81,12 @@ Info "node tools\setup-cli.mjs (เรียก zero ได้จากทุก
 node (Join-Path $RepoDir "tools\setup-cli.mjs")
 if ($LASTEXITCODE -ne 0) { Die "setup-cli พัง — ดูข้อความด้านบน" }
 
-# --- 8) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
+# --- 8) สแกนเครื่องมือในเครื่อง → Tool Index เข้าสมอง (non-fatal: สแกนไม่ได้ไม่ถือว่า install พัง) ---
+Info "node tools\tool-index.mjs (inventory เครื่องนี้เข้า 20_Atlas)"
+node (Join-Path $RepoDir "tools\tool-index.mjs")
+if ($LASTEXITCODE -ne 0) { Write-Host "  ! tool-index สแกนไม่สำเร็จ — ข้าม (รันทีหลังได้ด้วย zero tools)" -ForegroundColor Yellow }
+
+# --- 9) verify ว่าติดตั้งสำเร็จจริง (ไฟล์ครบ + spawn MCP คุย zero_health ได้) ---
 Info "node tools\verify-install.mjs"
 node (Join-Path $RepoDir "tools\verify-install.mjs")
 if ($LASTEXITCODE -ne 0) { Die "verify-install ไม่ผ่าน — ดูข้อ ✘ ด้านบน" }

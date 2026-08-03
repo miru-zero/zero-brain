@@ -493,7 +493,10 @@ function updateNoteInner(args: Record<string, unknown>): unknown {
   }
   meta.updated = today();
 
-  // regenerate links block ทุกครั้งที่บันทึกผ่าน update (managed block — ผู้ใช้แก้เองจะถูกคำนวณใหม่)
+  // guard+heal: frontmatter ไม่มี id (seed เก่า) — กู้จาก manifest ด้วย path ก่อนเขียน/upsert กัน record id:""
+  const healedId = healNoteId(meta, relPath);
+  if (!healedId) throw new Error(`โน้ตนี้ไม่มี id ทั้งในไฟล์และ manifest (path=${relPath}) — ซ่อม frontmatter ก่อน`);
+  meta.id = healedId;  // regenerate links block ทุกครั้งที่บันทึกผ่าน update (managed block — ผู้ใช้แก้เองจะถูกคำนวณใหม่)
   // T2 ที่เข้ารหัสอยู่ข้ามไป (body เป็น ciphertext หา marker ไม่เจอ — frontmatter links ยังเป็นหลักฐานอยู่)
   if (!isEncryptedT2(body)) body = regenerateLinksBlock(body, meta, readManifest(ROOT));
 
@@ -631,6 +634,15 @@ function handleSearch(args: Record<string, unknown>): unknown {
   };
 }
 
+/** meta.id ว่าง (seed เก่าไม่มี id ใน frontmatter) — กู้จาก manifest ด้วย path; ไม่มีจริงๆ คืน null */
+function healNoteId(meta: { id: string }, relPath: string): string | null {
+  if (meta.id) return meta.id;
+  for (const rec of readManifest(ROOT).values()) {
+    if (rec.path === relPath && rec.id) return rec.id;
+  }
+  return null;
+}
+
 function linkInner(args: Record<string, unknown>): unknown {
   ensureBrain();
   const fromArg = getString(args, "from_id");
@@ -641,8 +653,13 @@ function linkInner(args: Record<string, unknown>): unknown {
   const toNote = findNote(toArg);
   if (!fromNote) throw new Error(`ไม่พบโน้ต from: ${fromArg}`);
   if (!toNote) throw new Error(`ไม่พบโน้ต to: ${toArg}`);
-  const fromId = fromNote.meta.id;
-  const toId = toNote.meta.id;
+  // guard: กันลิงก์ขยะ to:"" — ถ้า frontmatter ไม่มี id ให้กู้จาก manifest (path) ก่อน ไม่ได้ค่อยฟ้อง
+  const fromId = healNoteId(fromNote.meta, fromNote.relPath);
+  const toId = healNoteId(toNote.meta, toNote.relPath);
+  if (!fromId) throw new Error(`โน้ต from ไม่มี id ทั้งในไฟล์และ manifest (path=${fromNote.relPath}) — ซ่อม frontmatter ก่อน`);
+  if (!toId) throw new Error(`โน้ต to ไม่มี id ทั้งในไฟล์และ manifest (path=${toNote.relPath}) — ซ่อม frontmatter ก่อน`);
+  fromNote.meta.id = fromId; // heal เขียนกลับลงไฟล์ตอน serialize ด้านล่าง
+  toNote.meta.id = toId;
 
   // dedup links.jsonl — ลิงก์เดิม (from/to/rel ทั้งสองทิศ) ไม่ append ซ้ำ
   const dup = readLinks(ROOT).some(
@@ -1221,6 +1238,11 @@ function handleEpisode(args: Record<string, unknown>): unknown {
   const ssid = clampText(args.ssid, 100);
   const workspace = clampText(args.workspace, 300);
   const note = clampText(args.note, 500);
+  const category = clampText(args.category, 100);
+  const chain = clampText(args.chain, 500);
+  const pitfalls = clampText(args.pitfalls, 500);
+  const patterns = clampText(args.patterns, 500);
+  const improvements = clampText(args.improvements, 500);
   const record: EpisodeRecord = {
     id: genId(),
     ts: new Date().toISOString(),
@@ -1233,6 +1255,11 @@ function handleEpisode(args: Record<string, unknown>): unknown {
     ...(ssid ? { ssid } : {}),
     ...(workspace ? { workspace } : {}),
     ...(note ? { note } : {}),
+    ...(category ? { category } : {}),
+    ...(chain ? { chain } : {}),
+    ...(pitfalls ? { pitfalls } : {}),
+    ...(patterns ? { patterns } : {}),
+    ...(improvements ? { improvements } : {}),
   };
   return withLock(ROOT, () => {
     appendEpisode(ROOT, record);
@@ -1256,7 +1283,7 @@ function handleEpisodes(args: Record<string, unknown>): unknown {
   let all = readEpisodes(ROOT);
   if (outcome) all = all.filter((e) => e.outcome === outcome);
   if (runtime) all = all.filter((e) => e.runtime.toLowerCase() === runtime);
-  if (query) all = all.filter((e) => `${e.task} ${e.method} ${e.note ?? ""}`.toLowerCase().includes(query));
+  if (query) all = all.filter((e) => `${e.task} ${e.method} ${e.note ?? ""} ${e.category ?? ""} ${e.pitfalls ?? ""} ${e.patterns ?? ""}`.toLowerCase().includes(query));
   const tail = all.slice(-limit);
   return { ok: true, count: tail.length, total: all.length, episodes: tail };
 }
@@ -1487,7 +1514,7 @@ const TOOLS = [
   {
     name: "zero_episode",
     description:
-      "จด episode ตอนจบงาน: task (ทำอะไร) + method (วิธี) + outcome (pass|fail|partial) + evidence (หลักฐาน บังคับตามกฎสมอง) + ssid/workspace/note — runtime (codex/kimi-code/daimon/…) stamp อัตโนมัติจาก MCP clientInfo ห้ามใส่ secret เรียกทุกครั้งที่จบงานหรือ session โดนตัด",
+      "จด episode ตอนจบงาน: task (ทำอะไร) + method (วิธี) + outcome (pass|fail|partial) + evidence (หลักฐาน บังคับตามกฎสมอง) — เสริมได้ด้วย category/chain/pitfalls/patterns/improvements (ยืมจาก field-journal) + ssid/workspace/note — runtime (codex/kimi-code/daimon/…) stamp อัตโนมัติจาก MCP clientInfo ห้ามใส่ secret เรียกทุกครั้งที่จบงานหรือ session โดนตัด",
     inputSchema: {
       type: "object",
       properties: {
@@ -1498,6 +1525,11 @@ const TOOLS = [
         ssid: { type: "string", description: "session id ถ้ารู้" },
         workspace: { type: "string", description: "โปรเจ็ค/ไดเรกทอรี" },
         note: { type: "string", description: "บทเรียน/เหตุที่ fail" },
+        category: { type: "string", description: "หมวดสถานการณ์ (apk/js-rev/binary/pentest/web/infra/…)" },
+        chain: { type: "string", description: "ลูกโซ่ที่ทำจริงแบบสั้น (a → b → c)" },
+        pitfalls: { type: "string", description: "กับดักที่เจอ — ค้นคำว่าเคยติดอะไรเจอตรง" },
+        patterns: { type: "string", description: "pattern ที่ใช้ซ้ำได้" },
+        improvements: { type: "string", description: "รอบหน้าควรทำอะไรดีขึ้น" },
         runtime: { type: "string", description: "override runtime (ปกติไม่ต้องส่ง — stamp จาก clientInfo)" },
       },
       required: ["task", "method", "outcome", "evidence"],

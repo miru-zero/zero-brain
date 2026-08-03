@@ -12,6 +12,7 @@
  *   zero obsidian       ซ่อน non-brain + จัดกลุ่มสี graph
  *   zero verify         เช็ค install ครบ 3 ชั้น
  *   zero smoke          รัน smoke test 121 ข้อ
+ *   zero tools          สแกนเครื่องมือในเครื่อง → เขียน Tool Index เข้าสมอง (20_Atlas)
  */
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
@@ -29,6 +30,7 @@ const CMDS = {
   cli: { run: T("setup-cli.mjs"), desc: "ติดตั้งคำสั่ง zero ลง PATH อีกครั้ง" },
   verify: { run: T("verify-install.mjs"), desc: "เช็ค install ครบ 3 ชั้น" },
   smoke: { run: path.join(RepoDir, "test", "smoke.mjs"), desc: "รัน smoke test" },
+  tools: { run: T("tool-index.mjs"), desc: "สแกนเครื่องมือในเครื่อง → Tool Index เข้าสมอง" },
 };
 
 function help() {

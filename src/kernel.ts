@@ -214,6 +214,16 @@ export interface EpisodeRecord {
   ssid?: string;
   workspace?: string;
   note?: string;
+  /** หมวดสถานการณ์ (apk/js-rev/binary/pentest/web/infra/…) — ยืมจาก field-journal */
+  category?: string;
+  /** ลูกโซ่ที่ทำจริงแบบสั้น (a → b → c) */
+  chain?: string;
+  /** กับดักที่เจอ (แยกจาก note — query หา "เคยติดอะไร" ได้ตรง) */
+  pitfalls?: string;
+  /** pattern ที่ใช้ซ้ำได้ */
+  patterns?: string;
+  /** รอบหน้าควรทำอะไรดีขึ้น */
+  improvements?: string;
 }
 
 export function appendEpisode(root: string, record: EpisodeRecord): void {
