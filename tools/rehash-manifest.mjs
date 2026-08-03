@@ -29,6 +29,6 @@ const tmp = path.join(KB, 'manifest.jsonl.tmp');
 fs.writeFileSync(tmp, out.join('\n') + '\n');
 fs.renameSync(tmp, path.join(KB, 'manifest.jsonl'));
 
-const audit = { ts: now, actor: 'miru-kimi-work', action: 'brain_fix_path_links', target: 'vault', detail: `rewrote 83 legacy path wikilinks in 24 files; re-hashed manifest (${updated} records updated, ${missing} missing files)` };
+const audit = { ts: now, actor: 'miru-kimi-work', action: 'brain_rehash_manifest', target: '.kb/manifest.jsonl', detail: process.argv[3] ?? `re-hashed manifest (${updated} records updated, ${missing} missing files)` };
 fs.appendFileSync(path.join(KB, 'audit.jsonl'), JSON.stringify(audit) + '\n');
 console.log(JSON.stringify({ manifest_records: lines.length, updated, missing }, null, 2));
