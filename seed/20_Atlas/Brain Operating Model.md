@@ -1,3 +1,10 @@
+---
+id: sysref-a6702213
+type: moc
+title: Brain Operating Model
+created: 2026-07-29
+---
+
 # Brain Operating Model — วงจรชีวิตของความรู้ในสมองใบนี้
 
 ## ภาพรวม

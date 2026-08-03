@@ -1,3 +1,10 @@
+---
+id: legacy-87f2dc63
+type: moc
+title: Rules & Identity
+created: 2026-07-29
+---
+
 # Rules & Identity
 
 ## Identity Anchors

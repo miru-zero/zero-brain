@@ -1,3 +1,10 @@
+---
+id: legacy-ff5673f3
+type: moc
+title: Leadership & Command Flow
+created: 2026-07-29
+---
+
 # Leadership & Command Flow
 
 M01 — Lia (ลีอา) เป็นผู้คุมงานกลางของทีม รับโจทย์จากผู้ใช้ แตกงานเป็น pods แล้วส่งต่อให้ agent เฉพาะทาง

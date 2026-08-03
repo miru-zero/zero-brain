@@ -1,3 +1,10 @@
+---
+id: legacy-fa47ae87
+type: moc
+title: Runtime YAML Bridge
+created: 2026-07-29
+---
+
 # Runtime YAML Bridge
 
 สะพานเชื่อมระหว่าง **agent markdown notes** ใน vault กับ **runtime YAML specs** ที่ `.miru_zero/agents/default/`

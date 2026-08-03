@@ -1,3 +1,10 @@
+---
+id: legacy-c04d43d4
+type: moc
+title: Agent Map by Function
+created: 2026-07-29
+---
+
 # Agent Map by Function
 
 ## Orchestration

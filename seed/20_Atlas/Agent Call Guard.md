@@ -1,3 +1,10 @@
+---
+id: legacy-437983b8
+type: moc
+title: Agent Call Guard
+created: 2026-07-29
+---
+
 # Agent Call Guard
 
 > ป้องกันไม่ให้ agent ถูกเรียกเป็น built-in `coder`/`explore` แทนที่จะเป็น Mxx จริง ๆ

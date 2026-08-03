@@ -1,3 +1,10 @@
+---
+id: legacy-244a8631
+type: moc
+title: Agent Team (M01-M24)
+created: 2026-07-29
+---
+
 # Miru Zero — Agent Team
 
 This workspace uses the **Miru Zero** agent system (M01–M24).

@@ -1,3 +1,10 @@
+---
+id: sysref-7682926f
+type: moc
+title: Memory Placement Rules
+created: 2026-07-29
+---
+
 # Memory Placement Rules — ของแต่ละอย่างควรอยู่ที่ไหน
 
 ## ตัดสินใจตามลำดับนี้

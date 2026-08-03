@@ -1,3 +1,10 @@
+---
+id: legacy-4ea8c8fe
+type: moc
+title: Incident Response Workflow
+created: 2026-07-29
+---
+
 # Incident Response Workflow
 
 Workflow มาตรฐานเมื่อ M01 — Lia (ลีอา) รับ incident หรืองานที่ยังเป็นก้อนใหญ่

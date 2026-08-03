@@ -1,3 +1,10 @@
+---
+id: legacy-dd06dd8f
+type: moc
+title: Agent Registry
+created: 2026-07-29
+---
+
 # Agent Registry
 
 ที่เก็บ agent definitions ทั้งหมดของ Miru Zero (M01–M24)
