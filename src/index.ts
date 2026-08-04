@@ -866,20 +866,37 @@ function healthInner(): unknown {
       // ข้ามไฟล์ที่ parse ไม่ได้
     }
   }
-  // จาก wikilinks ใน body (10_Notes + 20_Atlas) — resolve ผ่าน id/alias/title
+  // จาก wikilinks ใน body (10_Notes + 20_Atlas) — resolve ผ่าน id/alias/title/ชื่อไฟล์
   // (ช่องโหว่เดิม: health มองไม่เห็น body links — link ในเนื้อโน้ตตายโดยไม่มีใครรู้)
+  // (ช่องโหว่เดิม 2: นับเฉพาะ dead ไม่ markConn — orphans พุ่งหลอกทั้งที่กราฟ Obsidian เชื่อมอยู่)
   const aliases = readAliases(ROOT);
   const titles = new Map<string, string>();
-  for (const rec of manifest.values()) titles.set(rec.title, rec.id);
-  const resolveBodyTarget = (t: string): boolean =>
-    known.has(t) || t in aliases || titles.has(t);
+  const filenames = new Map<string, string>();
+  for (const rec of manifest.values()) {
+    if (rec.title) titles.set(rec.title, rec.id);
+    const base = path.basename(rec.path).replace(/\.md$/, "");
+    if (!filenames.has(base)) filenames.set(base, rec.id);
+  }
+  // resolve แบบเดียวกับ Obsidian: id → alias → title → ชื่อไฟล์
+  const resolveBodyTarget = (t: string): string | null => {
+    if (known.has(t)) return t;
+    if (t in aliases) {
+      const a = aliases[t];
+      const aid = typeof a === "string" ? a : "";
+      if (aid && known.has(aid)) return aid;
+    }
+    if (titles.has(t)) return titles.get(t)!;
+    if (filenames.has(t)) return filenames.get(t)!;
+    return null;
+  };
   const deadBody = new Set<string>();
-  const bodyScanTargets: { file: string; dir: string }[] = [];
-  for (const rec of manifest.values()) bodyScanTargets.push({ file: rec.path, dir: "" });
+  // id ของไฟล์ต้นทาง (atlas ที่ไม่อยู่ใน manifest อ่านจาก frontmatter เอง)
+  const bodyScanTargets: { file: string; id: string }[] = [];
+  for (const rec of manifest.values()) bodyScanTargets.push({ file: rec.path, id: rec.id });
   const atlasDir = path.join(ROOT, "20_Atlas");
   if (existsSync(atlasDir)) {
     for (const f of readdirSync(atlasDir)) {
-      if (f.endsWith(".md")) bodyScanTargets.push({ file: `20_Atlas/${f}`, dir: "" });
+      if (f.endsWith(".md")) bodyScanTargets.push({ file: `20_Atlas/${f}`, id: "" });
     }
   }
   const scanned = new Set<string>();
@@ -890,8 +907,14 @@ function healthInner(): unknown {
     if (!existsSync(abs)) continue;
     try {
       const parsed = parseNoteFile(readFileSync(abs, "utf8"));
+      const srcId = t.id || parsed.meta.id;
       for (const target of extractBodyWikilinks(parsed.body)) {
-        if (!resolveBodyTarget(target)) deadBody.add(`${t.file} -> [[${target}]]`);
+        const resolved = resolveBodyTarget(target);
+        if (resolved) {
+          if (srcId && known.has(srcId)) markConn(srcId, resolved);
+        } else {
+          deadBody.add(`${t.file} -> [[${target}]]`);
+        }
       }
     } catch {
       // ข้ามไฟล์ที่ parse ไม่ได้
