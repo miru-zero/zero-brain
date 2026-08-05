@@ -373,6 +373,36 @@ function handleInit(): unknown {
   return { ok: true, root, created, already_existed: created.length === 0 };
 }
 
+// ---------- capture auto-link (กฎ: โน้ตใหม่ห้ามลอย) ----------
+// ทุก capture ผูกเข้า hub 20_Atlas/Zero.md อัตโนมัติ + เขียน wikilink ลง Today.md
+// — ก่อนหน้านี้ capture สร้าง fleeting ด้วย links:[] เปล่า ก้อนลอยในกราฟ Obsidian
+// (resolve hub จาก manifest ทุกครั้ง ไม่ hard-code id — สมองใหม่ id อาจต่างกัน)
+const HUB_PATH = "20_Atlas/Zero.md";
+
+function hubIdFromManifest(manifest: Map<string, ManifestRecord>): string | null {
+  for (const rec of manifest.values()) if (rec.path === HUB_PATH) return rec.id;
+  return null;
+}
+
+// เพิ่มบรรทัด capture ใต้ "## Captures" ของ Today.md (best-effort — ห้ามทำ capture พัง)
+function appendTodayCapture(meta: NoteMeta): boolean {
+  const todayFile = path.join(ROOT, "20_Atlas", "Today.md");
+  if (!existsSync(todayFile)) return false;
+  const line = `- [[${meta.id}]] ${meta.title} _(fleeting · ${meta.domain})_`;
+  const text = readFileSync(todayFile, "utf8");
+  if (text.includes(`[[${meta.id}]]`)) return true; // idempotent
+  const section = "## Captures";
+  let next: string;
+  if (text.includes(section)) {
+    next = text.replace(section, `${section}\n${line}`);
+  } else {
+    next = text.replace(/\s*$/, "") + `\n\n${section}\n${line}\n`;
+  }
+  if (next === text) return false;
+  atomicWrite(todayFile, next);
+  return true;
+}
+
 function captureInner(args: Record<string, unknown>): unknown {
   ensureBrain();
   const text = getString(args, "text");
@@ -393,9 +423,19 @@ function captureInner(args: Record<string, unknown>): unknown {
     links: [],
     evidence: [],
   };
-  const relPath = saveNote("00_Fleeting", meta, text, false);
-  audit(ROOT, ACTOR, "brain_capture", meta.id, `path=${relPath} domain=${domain}`);
-  return { ok: true, id: meta.id, path: relPath };
+  const manifest = readManifest(ROOT);
+  const hub = hubIdFromManifest(manifest);
+  if (hub) meta.links.push({ to: hub, rel: "inbox-of" });
+  const body = regenerateLinksBlock(text, meta, manifest);
+  const relPath = saveNote("00_Fleeting", meta, body, false);
+  let todayAppended = false;
+  try {
+    todayAppended = appendTodayCapture(meta);
+  } catch {
+    todayAppended = false; // Today.md มีปัญหาไม่ควรทำ capture พัง
+  }
+  audit(ROOT, ACTOR, "brain_capture", meta.id, `path=${relPath} domain=${domain} hub=${hub ?? "none"}`);
+  return { ok: true, id: meta.id, path: relPath, linked_hub: hub, today_appended: todayAppended };
 }
 
 function handleCapture(args: Record<string, unknown>): unknown {
