@@ -41,7 +41,7 @@ cd $HOME/.zero/mcp/zero-brain
 powershell -ExecutionPolicy Bypass -File install.ps1   # Linux/macOS/cloud: bash install.sh (ขั้นตอนเดียวกัน)
 ```
 
-`install.ps1`/`install.sh` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 121/121 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon — idempotent มี backup, ใส่ตัวตนมิรุ+BOOT เป็น system prompt)
+`install.ps1`/`install.sh` ตัวเดียวทำครบ: npm install → build → init สมองจาก seed/ → smoke 121/121 (ห้ามข้าม) → **ผูก agent ทุก client ตั้งแต่ boot อัตโนมัติ** (`tools/setup-agents.mjs`: codex / kimi-claw / kimi-code / daimon / penguin — idempotent มี backup, ใส่ตัวตนมิรุ+BOOT เป็น system prompt · client ที่ไม่มี MCP runtime ได้ block ฉบับ zero CLI)
 ขั้นสุดท้าย: restart client แต่ละตัว → `node tools/verify-install.mjs` ต้อง PASS ครบ 3 ชั้น (ไฟล์ / ตัวตน / spawn MCP จริง) = สำเร็จ
 ทีมงาน: ส่งไฟล์ SKILL.md นี้ (หรือแพ็ก `zero.skill`) ให้ AI ตัวไหนก็ได้ มันสร้างโซน + ติดตั้งให้จบในตัว
 
@@ -52,6 +52,20 @@ sandbox คลาว **ไม่มีดิสก์ถาวรและไม
 2. **สมองถาวรอยู่ที่ brain git remote (private เท่านั้น)** — clone ลง `~/.zero/brain` ก่อนใช้งาน; ถ้ายังไม่มี remote ให้ init จาก seed แล้วเตือนเจ้าของทันทีว่า "สมองชุดนี้หายเมื่อ session จบ"
 3. **ก่อนจบ session ต้อง commit + push brain กลับ remote** — ไม่ push = ความจำที่เพิ่งสร้างหายถาวร
 4. tools `zero_*` จะไม่ขึ้นเป็น native tools บนคลาว — ใช้งานผ่าน spawn `node dist/index.js` (stdio) ตรงๆ เท่านั้น
+
+## Client ที่ไม่มี MCP runtime (penguin, sandbox, CLI อื่น)
+
+บาง client (เช่น PenguinHarness — `mcpServers` ใน config เป็น placeholder ที่ยังไม่ implement) เข้าถึงสมองผ่าน **zero CLI** ที่ลง PATH แล้ว (`~/.zero/bin`):
+
+```bash
+zero health                                    # เช็คสมอง
+zero mcp zero_search '{"query":"..."}'         # ค้นความจำ (ค้นก่อนทำงานที่เคยทำเสมอ)
+zero mcp zero_match '{"query":"..."}'          # เคยทำไหม/วิธีไหน/ได้ผลไหม
+zero mcp zero_capture '{"text":"..."}'         # จดด่วน
+zero mcp zero_episode '{"task":"...","method":"...","outcome":"pass|fail|partial","evidence":"..."}'
+```
+
+`zero mcp <tool> '<json-args>'` = passthrough ไปยัง tool `zero_*` ใดก็ได้ผ่าน stdio — schema เหมือน MCP เป๊ะ · setup-agents.mjs ฝัง AGENTS.md ฉบับ CLI + skill ให้ client พวกนี้อัตโนมัติ (ตอนนี้: penguin ทุก project/agent ใน `~/.penguin/data`)
 
 ## กฎเหล็กที่ต้องเที่ยงทุกครั้ง
 
