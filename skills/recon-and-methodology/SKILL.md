@@ -1,7 +1,7 @@
 ---
 name: recon-and-methodology
-description: >-
-  Reconnaissance and methodology playbook. Use when mapping assets, discovering endpoints, fingerprinting technology, and building a structured testing plan for a new target.
+description: Reconnaissance and methodology playbook. Use when mapping assets, discovering endpoints, fingerprinting technology, and building a structured testing plan for a new target.
+short_description: Reconnaissance and methodology playbook. Use when mapping assets, discovering endpoints, fingerprinting technology,…
 ---
 
 # SKILL: Recon and Methodology — Expert Bug Bounty Playbook

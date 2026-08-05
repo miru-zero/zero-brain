@@ -1,7 +1,7 @@
 ---
 name: ntlm-relay-coercion
-description: >-
-  NTLM relay and authentication coercion playbook. Use when capturing and relaying NTLM authentication to escalate privileges via SMB, LDAP, HTTP, or MSSQL relay targets, combined with PetitPotam, PrinterBug, and other coercion methods.
+description: NTLM relay and authentication coercion playbook. Use when capturing and relaying NTLM authentication to escalate privileges via SMB, LDAP, HTTP, or MSSQL relay targets, combined with PetitPotam, PrinterBug, and other coercion methods.
+short_description: NTLM relay and authentication coercion playbook. Use when capturing and relaying NTLM authentication to escalate…
 ---
 
 # SKILL: NTLM Relay and Authentication Coercion — Expert Attack Playbook

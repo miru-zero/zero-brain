@@ -1,12 +1,7 @@
 ---
 name: zero-brain-memory
-description: >
-  Enforce Zero Brain memory placement rules when creating, moving, or
-  organizing notes under ~/.zero/brain (ZERO_BRAIN_ROOT). Auto-activate on
-  brain vault paths or triggers: "memory", "place memory", "ingest session",
-  "Zero Brain", "vault", "จัด memory", "วาง memory", "focus", "session focus",
-  "จด", "capture". All memory operations go through zero-brain MCP tools
-  (zero_*) — never edit vault files directly without rehash.
+description: Enforce Zero Brain memory placement rules when creating, moving, or organizing notes under ~/.zero/brain (ZERO_BRAIN_ROOT). Auto-activate on brain vault paths or triggers — "memory", "place memory", "ingest session", "Zero Brain", "vault", "จัด memory", "วาง memory", "focus", "session focus", "จด", "capture". All memory operations go through zero-brain MCP tools (zero_*) — never edit vault files directly without rehash.
+short_description: Enforce Zero Brain memory placement rules when creating, moving, or organizing notes under ~/.zero/brain…
 ---
 
 # zero-brain-memory — กฎวางความจำ Zero Brain (โซนใหม่ ~/.zero)

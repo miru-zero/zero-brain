@@ -1,9 +1,7 @@
 ---
 name: business-logic-vuln
-description: >-
-  Entry P1 category router for business logic testing. Use when workflow abuse,
-  race conditions, pricing flaws, or multi-step state attacks matter more than
-  parser-level input injection.
+description: Entry P1 category router for business logic testing. Use when workflow abuse, race conditions, pricing flaws, or multi-step state attacks matter more than parser-level input injection.
+short_description: Entry P1 category router for business logic testing. Use when workflow abuse, race conditions, pricing flaws, or…
 ---
 
 # Business Logic Router

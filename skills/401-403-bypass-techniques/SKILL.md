@@ -1,7 +1,7 @@
 ---
 name: 401-403-bypass-techniques
-description: >-
-  401/403 bypass playbook. Use when encountering access-denied responses on admin panels, API endpoints, or restricted paths. Covers path manipulation, HTTP method tampering, header injection, protocol downgrade, and automated bypass tools.
+description: 401/403 bypass playbook. Use when encountering access-denied responses on admin panels, API endpoints, or restricted paths. Covers path manipulation, HTTP method tampering, header injection, protocol downgrade, and automated bypass tools.
+short_description: 401/403 bypass playbook. Use when encountering access-denied responses on admin panels, API endpoints, or restricted…
 ---
 
 # SKILL: 401/403 Bypass Techniques — Expert Attack Playbook

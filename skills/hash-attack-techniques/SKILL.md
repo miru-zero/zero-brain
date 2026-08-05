@@ -1,9 +1,7 @@
 ---
 name: hash-attack-techniques
-description: >-
-  Hash attack playbook. Use when exploiting length extension, MD5/SHA1
-  collisions, HMAC timing leaks, birthday attacks, or hash-based proof
-  of work in CTF and authorized testing scenarios.
+description: Hash attack playbook. Use when exploiting length extension, MD5/SHA1 collisions, HMAC timing leaks, birthday attacks, or hash-based proof of work in CTF and authorized testing scenarios.
+short_description: Hash attack playbook. Use when exploiting length extension, MD5/SHA1 collisions, HMAC timing leaks, birthday…
 ---
 
 # SKILL: Hash Attack Techniques — Expert Cryptanalysis Playbook

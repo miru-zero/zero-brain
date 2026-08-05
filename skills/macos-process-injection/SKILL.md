@@ -1,7 +1,7 @@
 ---
 name: macos-process-injection
-description: >-
-  macOS process injection playbook. Use when you need to inject code into running or launching macOS processes via dylib hijacking, DYLD environment variables, XPC exploitation, Mach port manipulation, or Electron/Chromium abuse.
+description: macOS process injection playbook. Use when you need to inject code into running or launching macOS processes via dylib hijacking, DYLD environment variables, XPC exploitation, Mach port manipulation, or Electron/Chromium abuse.
+short_description: macOS process injection playbook. Use when you need to inject code into running or launching macOS processes via…
 ---
 
 # SKILL: macOS Process Injection — Expert Attack Playbook

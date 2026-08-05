@@ -1,10 +1,7 @@
 ---
 name: prototype-pollution
-description: >-
-  Prototype pollution testing for JavaScript stacks. Use when user input is
-  merged into objects (query parsers, JSON bodies, deep assign), when
-  configuring libraries via untrusted keys, or when hunting RCE gadgets via
-  polluted Object.prototype in Node or the browser.
+description: Prototype pollution testing for JavaScript stacks. Use when user input is merged into objects (query parsers, JSON bodies, deep assign), when configuring libraries via untrusted keys, or when hunting RCE gadgets via polluted Object.prototype in Node or the browser.
+short_description: Prototype pollution testing for JavaScript stacks. Use when user input is merged into objects (query parsers, JSON…
 ---
 
 # SKILL: Prototype Pollution — Expert Attack Playbook

@@ -1,7 +1,7 @@
 ---
 name: type-juggling
-description: >-
-  PHP type juggling and weak comparison (`==`) bypass. Use when authentication, HMAC/signature checks, or token validation uses loose equality, numeric coercion, or hash comparisons without strict types — common in legacy PHP and CTF-style code paths.
+description: PHP type juggling and weak comparison (`==`) bypass. Use when authentication, HMAC/signature checks, or token validation uses loose equality, numeric coercion, or hash comparisons without strict types — common in legacy PHP and CTF-style code paths.
+short_description: PHP type juggling and weak comparison (`==`) bypass. Use when authentication, HMAC/signature checks, or token…
 ---
 
 # SKILL: PHP Type Juggling — Weak Comparison & Magic Hash Bypass

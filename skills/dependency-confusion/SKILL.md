@@ -1,7 +1,7 @@
 ---
 name: dependency-confusion
-description: >-
-  Supply-chain testing via package-manager dependency confusion: when internal package names resolve to attacker-controlled public registries, leading to malicious install and script execution. Use for npm/pip/gem/Maven/Composer/Docker manifest review and authorized red-team supply-chain exercises.
+description: Supply-chain testing via package-manager dependency confusion — when internal package names resolve to attacker-controlled public registries, leading to malicious install and script execution. Use for npm/pip/gem/Maven/Composer/Docker manifest review and authorized red-team supply-chain exercises.
+short_description: Supply-chain testing via package-manager dependency confusion — when internal package names resolve to…
 ---
 
 # SKILL: Dependency Confusion — Supply Chain Attack Playbook

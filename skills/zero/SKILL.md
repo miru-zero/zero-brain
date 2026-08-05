@@ -1,12 +1,7 @@
 ---
 name: zero
-description: >
-  Auto-activate when the user types /zero or asks about the Zero system — boot,
-  health-check, sync, install, or troubleshoot — e.g. "/zero", "เปิด zero",
-  "เช็คระบบ zero", "zero status", "ติดตั้ง zero", "zero ไม่ทำงาน", "ซิงก์สมอง",
-  "อัปเดตสมอง", "zero-brain", "สกิลของ zero". Covers the ~/.zero zone: brain
-  vault, zero-brain MCP (zero_* tools), and daimon skills. Also use when an AI
-  receives this SKILL.md as an install package for a fresh machine.
+description: Auto-activate when the user types /zero or asks about the Zero system — boot, health-check, sync, install, or troubleshoot — e.g. "/zero", "เปิด zero", "เช็คระบบ zero", "zero status", "ติดตั้ง zero", "zero ไม่ทำงาน", "ซิงก์สมอง", "อัปเดตสมอง", "zero-brain", "สกิลของ zero". Covers the ~/.zero zone — brain vault, zero-brain MCP (zero_* tools), and daimon skills. Also use when an AI receives this SKILL.md as an install package for a fresh machine.
+short_description: Auto-activate when the user types /zero or asks about the Zero system — boot, health-check, sync, install, or…
 ---
 
 # ⭕ ZERO — Boot / Health / Install ของระบบ Zero

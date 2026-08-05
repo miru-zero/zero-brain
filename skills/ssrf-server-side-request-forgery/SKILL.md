@@ -1,7 +1,7 @@
 ---
 name: ssrf-server-side-request-forgery
-description: >-
-  SSRF playbook. Use when the server fetches URLs, resolves hostnames, imports remote content, or can be driven toward internal networks, cloud metadata, or secondary protocols.
+description: SSRF playbook. Use when the server fetches URLs, resolves hostnames, imports remote content, or can be driven toward internal networks, cloud metadata, or secondary protocols.
+short_description: SSRF playbook. Use when the server fetches URLs, resolves hostnames, imports remote content, or can be driven toward…
 ---
 
 # SKILL: Server-Side Request Forgery (SSRF) — Expert Attack Playbook

@@ -1,7 +1,7 @@
 ---
 name: xxe-xml-external-entity
-description: >-
-  XXE playbook. Use when XML, SVG, OOXML, SOAP, or parser-driven imports may resolve external entities, files, or internal network resources.
+description: XXE playbook. Use when XML, SVG, OOXML, SOAP, or parser-driven imports may resolve external entities, files, or internal network resources.
+short_description: XXE playbook. Use when XML, SVG, OOXML, SOAP, or parser-driven imports may resolve external entities, files, or…
 ---
 
 # SKILL: XML External Entity Injection (XXE) — Expert Attack Playbook

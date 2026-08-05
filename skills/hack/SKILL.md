@@ -1,10 +1,7 @@
 ---
 name: hack
-description: >-
-  Entry P0 primary router for HackSkills. Use when the task involves web
-  application testing, API security assessment, recon, vulnerability triage,
-  exploit path planning, or choosing the right next category skill before any
-  deep topic skill.
+description: Entry P0 primary router for HackSkills. Use when the task involves web application testing, API security assessment, recon, vulnerability triage, exploit path planning, or choosing the right next category skill before any deep topic skill.
+short_description: Entry P0 primary router for HackSkills. Use when the task involves web application testing, API security assessment,…
 ---
 
 # HACKING SKILLS / HackSkills

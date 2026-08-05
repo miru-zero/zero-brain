@@ -1,7 +1,7 @@
 ---
 name: active-directory-acl-abuse
-description: >-
-  Active Directory ACL abuse playbook. Use when exploiting misconfigured AD permissions including GenericAll, WriteDACL, DCSync rights, shadow credentials, LAPS reading, GPO abuse, and BloodHound-guided attack paths.
+description: Active Directory ACL abuse playbook. Use when exploiting misconfigured AD permissions including GenericAll, WriteDACL, DCSync rights, shadow credentials, LAPS reading, GPO abuse, and BloodHound-guided attack paths.
+short_description: Active Directory ACL abuse playbook. Use when exploiting misconfigured AD permissions including GenericAll,…
 ---
 
 # SKILL: AD ACL Abuse — Expert Attack Playbook

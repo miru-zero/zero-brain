@@ -1,9 +1,7 @@
 ---
 name: recon-for-sec
-description: >-
-  Entry P1 category router for reconnaissance and methodology. Use when mapping
-  scope, discovering assets, fingerprinting technology, building endpoint
-  inventory, and choosing the first high-value security testing path.
+description: Entry P1 category router for reconnaissance and methodology. Use when mapping scope, discovering assets, fingerprinting technology, building endpoint inventory, and choosing the first high-value security testing path.
+short_description: Entry P1 category router for reconnaissance and methodology. Use when mapping scope, discovering assets,…
 ---
 
 # Recon and Methodology Router

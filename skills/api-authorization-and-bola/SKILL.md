@@ -1,7 +1,7 @@
 ---
 name: api-authorization-and-bola
-description: >-
-  API authorization and BOLA testing playbook. Use when APIs expose object identifiers, nested resources, hidden writable fields, or weak function-level authorization.
+description: API authorization and BOLA testing playbook. Use when APIs expose object identifiers, nested resources, hidden writable fields, or weak function-level authorization.
+short_description: API authorization and BOLA testing playbook. Use when APIs expose object identifiers, nested resources, hidden…
 ---
 
 # SKILL: API Authorization and BOLA — Object Access, Function Access, and Mass Assignment

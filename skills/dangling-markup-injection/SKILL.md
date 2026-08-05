@@ -1,10 +1,7 @@
 ---
 name: dangling-markup-injection
-description: >-
-  Dangling markup injection playbook. Use when HTML injection is possible but
-  JavaScript execution is blocked (CSP, sanitizer strips event handlers, WAF
-  blocks script tags) — exfiltrate CSRF tokens, session data, and page content
-  by injecting unclosed HTML tags that capture subsequent page content.
+description: Dangling markup injection playbook. Use when HTML injection is possible but JavaScript execution is blocked (CSP, sanitizer strips event handlers, WAF blocks script tags) — exfiltrate CSRF tokens, session data, and page content by injecting unclosed HTML tags that capture subsequent page content.
+short_description: Dangling markup injection playbook. Use when HTML injection is possible but JavaScript execution is blocked (CSP,…
 ---
 
 # SKILL: Dangling Markup Injection — Exfiltration Without JavaScript

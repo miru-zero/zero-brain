@@ -1,7 +1,7 @@
 ---
 name: container-escape-techniques
-description: >-
-  Container escape playbook. Use when operating inside a Docker container, LXC, or Kubernetes pod and need to escape to the host via privileged mode, capabilities, Docker socket, cgroup abuse, namespace tricks, or runtime vulnerabilities.
+description: Container escape playbook. Use when operating inside a Docker container, LXC, or Kubernetes pod and need to escape to the host via privileged mode, capabilities, Docker socket, cgroup abuse, namespace tricks, or runtime vulnerabilities.
+short_description: Container escape playbook. Use when operating inside a Docker container, LXC, or Kubernetes pod and need to escape…
 ---
 
 # SKILL: Container Escape Techniques — Expert Attack Playbook

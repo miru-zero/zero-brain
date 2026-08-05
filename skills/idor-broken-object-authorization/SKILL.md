@@ -1,7 +1,7 @@
 ---
 name: idor-broken-object-authorization
-description: >-
-  IDOR and broken object authorization testing playbook. Use when requests expose object identifiers, tenant boundaries, writable fields, or missing object-level authorization checks.
+description: IDOR and broken object authorization testing playbook. Use when requests expose object identifiers, tenant boundaries, writable fields, or missing object-level authorization checks.
+short_description: IDOR and broken object authorization testing playbook. Use when requests expose object identifiers, tenant…
 ---
 
 # SKILL: IDOR / Broken Object Level Authorization — Expert Attack Playbook

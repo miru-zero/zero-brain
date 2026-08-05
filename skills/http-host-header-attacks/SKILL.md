@@ -1,10 +1,7 @@
 ---
 name: http-host-header-attacks
-description: >-
-  HTTP Host header injection and routing abuse playbook. Use when the application
-  trusts the Host header for generating URLs, routing requests, or access control
-  — enabling password reset poisoning, web cache poisoning, SSRF via routing,
-  and virtual host bypass.
+description: HTTP Host header injection and routing abuse playbook. Use when the application trusts the Host header for generating URLs, routing requests, or access control — enabling password reset poisoning, web cache poisoning, SSRF via routing, and virtual host bypass.
+short_description: HTTP Host header injection and routing abuse playbook. Use when the application trusts the Host header for…
 ---
 
 # SKILL: HTTP Host Header Attacks — Injection & Routing Abuse

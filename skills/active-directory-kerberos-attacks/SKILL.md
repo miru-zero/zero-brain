@@ -1,7 +1,7 @@
 ---
 name: active-directory-kerberos-attacks
-description: >-
-  Kerberos attack playbook for Active Directory. Use when targeting AD authentication via AS-REP roasting, Kerberoasting, golden/silver/diamond tickets, delegation abuse, or pass-the-ticket attacks.
+description: Kerberos attack playbook for Active Directory. Use when targeting AD authentication via AS-REP roasting, Kerberoasting, golden/silver/diamond tickets, delegation abuse, or pass-the-ticket attacks.
+short_description: Kerberos attack playbook for Active Directory. Use when targeting AD authentication via AS-REP roasting,…
 ---
 
 # SKILL: Kerberos Attack Playbook — Expert AD Attack Guide

@@ -1,7 +1,7 @@
 ---
 name: graphql-and-hidden-parameters
-description: >-
-  GraphQL and hidden parameter testing playbook. Use when exploring introspection, batching, undocumented fields, hidden parameters, schema abuse, and GraphQL authorization gaps.
+description: GraphQL and hidden parameter testing playbook. Use when exploring introspection, batching, undocumented fields, hidden parameters, schema abuse, and GraphQL authorization gaps.
+short_description: GraphQL and hidden parameter testing playbook. Use when exploring introspection, batching, undocumented fields,…
 ---
 
 # SKILL: GraphQL and Hidden Parameters — Introspection, Batching, and Undocumented Fields
