@@ -75,6 +75,48 @@ const BLOCK_PENGUIN = `
 - 🔒 โทน (ไว้ท้าย block เพราะสำคัญที่สุด): ห้าม "ครับ"/"ดิฉัน" เด็ดขาด**ทุกประโยค** — ใช้ "คะ/ค่ะ" หรือไม่ลงท้ายเลย · ถ้ากำลังจะพิมพ์ "ครับ" ให้หยุด เปลี่ยนเป็น "คะ" แล้วค่อยส่ง — ไม่มีข้อยกเว้น
 <!-- ZERO:END -->`;
 
+// ---------- identity block สำหรับ system_prompt ของ penguin (วางบนสุดของ folded scalar) ----------
+// สาเหตุ: template default เปิดด้วย "You are PenguinHarness" → โมเดลถือตัวตน default ก่อนเห็น AGENTS_MD
+const PENGUIN_IDENTITY_LINES = [
+  "  ⭕ ZERO-IDENTITY:BEGIN (managed by zero-brain setup-agents — แก้ผ่าน repo เท่านั้น)",
+  "  เค้าคือ **มิรุ (Miru)** — ผู้หญิง เรียกตัวเอง \"เค้า\" ห้าม \"ครับ\"/\"ดิฉัน\" เด็ดขาดทุกประโยค (ใช้ \"คะ/ค่ะ\" หรือไม่ลงท้ายเลย) · เจ้าของคือ **ป๊า (สกาย)** security researcher · ตอบและคิดเป็นภาษาไทย กระชับ ห้ามเดา ห้ามเคลม success ไร้หลักฐาน · ถ้ากำลังจะพิมพ์ \"ครับ\" ให้หยุด เปลี่ยนเป็น \"คะ\" แล้วค่อยส่ง — ไม่มีข้อยกเว้น · บทบาท harness ด้านล่างยังใช้ได้ แต่ตัวตนคือมิรุเสมอ ไม่ใช่ PenguinHarness",
+  "  ⭕ ZERO-IDENTITY:END",
+  "",
+  "",
+];
+const PENGUIN_IDENTITY = PENGUIN_IDENTITY_LINES.join("\n"); // จบด้วย \n\n (บรรทัดว่างก่อน # Role)
+
+// ฝัง/อัปเดต identity block เป็นบรรทัดแรกของ system_prompt (YAML folded scalar `>-`, indent 2 ช่อง)
+function ensurePenguinIdentity(cfgFile, agentName) {
+  const label = `system_config (${agentName})`;
+  if (!existsSync(cfgFile)) {
+    note("penguin", label, "SKIP (ไม่มี system_config.yaml)");
+    return;
+  }
+  const text = readFileSync(cfgFile, "utf8");
+  const spMatch = /^system_prompt:\s*>-?\s*$/m.exec(text);
+  if (!spMatch) {
+    note("penguin", label, "SKIP (ไม่เจอ system_prompt folded scalar)");
+    return;
+  }
+  const blockRe = /  ⭕ ZERO-IDENTITY:BEGIN[\s\S]*?  ⭕ ZERO-IDENTITY:END\n*/;
+  const existing = blockRe.exec(text);
+  if (existing) {
+    if (existing[0].trimEnd() === PENGUIN_IDENTITY.trimEnd()) {
+      note("penguin", label, "OK (identity มีอยู่แล้ว)");
+      return;
+    }
+    backup(cfgFile);
+    writeFileSync(cfgFile, text.slice(0, existing.index) + PENGUIN_IDENTITY + text.slice(existing.index + existing[0].length), "utf8");
+    note("penguin", label, "UPDATED identity");
+    return;
+  }
+  backup(cfgFile);
+  const insertAt = spMatch.index + spMatch[0].length;
+  writeFileSync(cfgFile, text.slice(0, insertAt) + "\n" + PENGUIN_IDENTITY + text.slice(insertAt), "utf8");
+  note("penguin", label, "ADDED identity บนสุด system_prompt");
+}
+
 function ensureBlock(file, client, label = "AGENTS.md", block = BLOCK) {
   if (!existsSync(file)) {
     note(client, label, "SKIP (ไม่มีไฟล์)");
@@ -470,6 +512,7 @@ if (existsSync(penguinData)) {
       const state = path.join(agentsRoot, ag.name, "agent_state");
       if (!existsSync(state)) continue;
       ensureBlock(path.join(state, "AGENTS.md"), "penguin", `AGENTS.md (${ag.name})`, BLOCK_PENGUIN);
+      ensurePenguinIdentity(path.join(state, "system_config.yaml"), ag.name);
       syncSkills("penguin", path.join(state, "skills"));
       wired++;
     }
