@@ -128,6 +128,8 @@ function rebuildIndex() {
   const lines = [
     `# Backup Edit — INDEX`,
     ``,
+    `กฎ: [[Edit Backup and Workspace Rules]] · ศูนย์กลาง: [[Zero]]`,
+    ``,
     `อัปเดตล่าสุด: ${stamp()} · โปรเจ็ค: ${byProject.size} · ไฟล์ที่มี backup: ${totalFiles} · snapshots: ${entries.length}`,
     ``,
     `| โปรเจ็ค | ไฟล์ | snapshots | snapshot ล่าสุด |`,
